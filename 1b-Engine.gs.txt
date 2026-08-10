@@ -269,8 +269,13 @@ function ensureSheet(ss, name, headers) {
 }
 
 function getSheet(name) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
-  if (!sh) throw new Error("ไม่พบชีต " + name + " — รัน setup() ก่อน");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    setup(); // Auto-create sheets if not initialized yet
+    sh = ss.getSheetByName(name);
+  }
+  if (!sh) throw new Error("ไม่พบชีต " + name);
   return sh;
 }
 
