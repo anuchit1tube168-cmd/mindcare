@@ -228,7 +228,7 @@ function getActiveSpreadsheet() {
   let ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) {
     const props = PropertiesService.getScriptProperties();
-    const sheetId = props.getProperty("SPREADSHEET_ID");
+    const sheetId = props.getProperty("SPREADSHEET_ID") || "1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ";
     if (sheetId) {
       try { ss = SpreadsheetApp.openById(sheetId); } catch (e) {}
     }
