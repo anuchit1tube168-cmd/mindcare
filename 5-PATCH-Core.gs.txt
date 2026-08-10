@@ -1,0 +1,96 @@
+/* ==========================================================
+ * PATCH สำหรับไฟล์ Core
+ *
+ * วิธีใช้: เปิดไฟล์ Core ใน Apps Script แล้วลบ 3 ฟังก์ชันท้ายไฟล์นี้ทิ้ง
+ *   1) notifyTeachers
+ *   2) pushLineMessage
+ *   3) pushTelegramMessage
+ * (getTeacherLineIds ที่อยู่ท้ายสุด "ไม่ต้องลบ" — คงไว้ตามเดิม)
+ * แล้ววางบล็อกด้านล่างนี้แทนที่
+ *
+ * สิ่งที่เปลี่ยน:
+ * - notifyTeachers ส่งผ่าน sendAlert (Telegram เสมอ + LINE ตามโควตา)
+ *   และเลิกเช็ค LINE token ที่ต้นฟังก์ชัน เพราะเดิมถ้าไม่มี token
+ *   จะ return ก่อนถึง Telegram ทำให้แจ้งเตือนหายทั้งหมด
+ * - pushLineMessage / pushTelegramMessage คืน true/false
+ *   เพื่อให้ sendAlert รู้ว่าส่งถึงจริงหรือไม่
+ * ========================================================== */
+
+/**
+ * ส่งข้อความแจ้งอาจารย์ — ทั้ง Telegram และ LINE ผ่าน sendAlert
+ * ไม่เช็ค LINE token ที่นี่ เพราะถ้า LINE ใช้ไม่ได้ Telegram ต้องยังส่งถึงอาจารย์
+ * (ห้ามให้การแจ้งเตือนเคสเสี่ยงหายไปเพราะช่องทางใดช่องทางหนึ่งล่ม)
+ */
+function notifyTeachers(alertId, d, risk) {
+  const header = risk.level === "RED"
+    ? "🔴 [ด่วนที่สุด] ต้องติดต่อภายใน 1 ชั่วโมง"
+    : "🟠 [สำคัญ] ต้องติดต่อภายใน 24 ชั่วโมง";
+
+  // เจตนาไม่ใส่คะแนนละเอียดในข้อความ — กันข้อมูลอ่อนไหวหลุด
+  // ถ้าเครื่องอาจารย์ถูกเปิดดูโดยคนอื่น ให้ดูรายละเอียดใน dashboard แทน
+  const text =
+    header + "\n" +
+    "ระบบดูแลใจ วพอ.พอ.\n" +
+    "รหัสนักเรียน: " + d.studentId + "\n" +
+    "ระดับ: " + risk.level + "\n" +
+    "รหัสงาน: " + alertId + "\n" +
+    "โปรดเปิด dashboard เพื่อดูรายละเอียดและกดรับเรื่อง";
+
+  const res = sendAlert(text, risk.level);
+
+  // ไม่ถึงมืออาจารย์เลยทั้งสองช่องทาง = เรื่องร้ายแรง ต้องมีร่องรอยไว้ตรวจ
+  if (!res.telegram && res.line === 0) {
+    logError("notifyTeachers", "ส่งแจ้งเตือนไม่สำเร็จทั้ง LINE และ Telegram", alertId);
+  }
+}
+
+function pushLineMessage(token, userId, text) {
+  try {
+    const res = UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", {
+      method: "post",
+      contentType: "application/json",
+      headers: { Authorization: "Bearer " + token },
+      payload: JSON.stringify({ to: userId, messages: [{ type: "text", text: text }] }),
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) {
+      logError("pushLineMessage", "HTTP " + res.getResponseCode() + " " + res.getContentText(), userId);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logError("pushLineMessage", err, userId);
+    return false;
+  }
+}
+
+/**
+ * ส่งข้อความแจ้งเตือนเข้า Telegram group/chat
+ * ตั้งค่าใน Script Properties: TELEGRAM_BOT_TOKEN และ TELEGRAM_CHAT_ID
+ * - BOT_TOKEN: ได้จาก @BotFather ตอนสร้างบอท
+ * - CHAT_ID: id ของกลุ่ม/แชทที่จะส่ง (กลุ่มขึ้นต้นด้วย -100...)
+ * ถ้ายังไม่ตั้งค่า จะข้ามเงียบ ๆ ไม่ทำให้ระบบหลัก error
+ */
+function pushTelegramMessage(text) {
+  const props = PropertiesService.getScriptProperties();
+  const botToken = props.getProperty("TELEGRAM_BOT_TOKEN");
+  const chatId = props.getProperty("TELEGRAM_CHAT_ID");
+  if (!botToken || !chatId) return false; // ยังไม่ตั้งค่า = ข้าม
+
+  try {
+    const res = UrlFetchApp.fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({ chat_id: chatId, text: text, disable_web_page_preview: true }),
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) {
+      logError("pushTelegramMessage", "HTTP " + res.getResponseCode() + " " + res.getContentText(), chatId);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logError("pushTelegramMessage", err, "");
+    return false;
+  }
+}

@@ -1,0 +1,3 @@
+*.gsheet
+*.gdoc
+.DS_Store

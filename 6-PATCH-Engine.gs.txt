@@ -1,0 +1,96 @@
+/* ==========================================================
+ * PATCH สำหรับไฟล์ Engine
+ *
+ * วิธีใช้: เปิดไฟล์ Engine ใน Apps Script แล้วลบ 2 ฟังก์ชันนี้ทิ้ง
+ *   1) checkOverdueAlerts   (อยู่ต้นไฟล์)
+ *   2) weeklyWatchReport    (อยู่ช่วงกลางไฟล์ ก่อน exportReportToDrive)
+ * ฟังก์ชันอื่นในไฟล์ Engine ไม่ต้องแตะ
+ * แล้ววาง 2 ฟังก์ชันด้านล่างนี้แทนที่ (วางตำแหน่งไหนในไฟล์ก็ได้)
+ *
+ * สิ่งที่เปลี่ยน:
+ * - ทั้งสองฟังก์ชันส่งแจ้งเตือนผ่าน sendAlert แทนการยิง LINE ตรง
+ *   ทำให้ Telegram ได้รับเสมอ และ LINE ถูกคุมตามโควตาที่เหลือ
+ * - เตือนซ้ำของเคสแดงยังได้ LINE แม้โควตาใกล้หมด
+ *   ส่วนเตือนซ้ำระดับอื่นและรายงานรายสัปดาห์จะงด LINE ก่อนเพื่อสงวนโควตา
+ * - ลบตัวแปร token / recipients ที่ไม่ใช้แล้วออก
+ * ========================================================== */
+
+/* ==========================================================
+ * Escalation: ตรวจงานค้างเกิน SLA (ตั้ง time-driven trigger รายชั่วโมง)
+ * ตั้งค่า: Triggers → checkOverdueAlerts → Time-driven → Hour timer
+ * ========================================================== */
+
+function checkOverdueAlerts() {
+  const sh = getSheet(SHEETS.ALERTS);
+  const rows = sh.getDataRange().getValues();
+  const now = new Date();
+  const updates = []; // เก็บไว้เขียนทีเดียว ลดจำนวนครั้งที่แตะชีต
+
+  for (let i = 1; i < rows.length; i++) {
+    const status = rows[i][6];
+    const due = rows[i][7];
+    const escalations = Number(rows[i][11] || 0);
+    const level = rows[i][4];
+
+    const stillOpen = status === "แจ้งแล้ว" || status === "รับเรื่องแล้ว";
+    if (!stillOpen || !(due instanceof Date) || now < due || escalations >= 3) continue;
+
+    const text =
+      "⏰ [เตือนซ้ำ ครั้งที่ " + (escalations + 1) + "] งานเกินกำหนด\n" +
+      "รหัสงาน: " + rows[i][1] + "\n" +
+      "รหัสนักเรียน: " + rows[i][3] + "\n" +
+      "ระดับ: " + level + " สถานะปัจจุบัน: " + status + "\n" +
+      "โปรดติดต่อนักเรียนและอัปเดตสถานะโดยเร็ว";
+
+    // เตือนซ้ำใช้ระดับของเคสจริง เพื่อให้เคสแดงยังได้ LINE แม้โควตาเหลือน้อย
+    sendAlert(text, level === "RED" ? "RED" : "REPORT");
+    updates.push({ row: i + 1, escalations: escalations + 1 });
+  }
+
+  updates.forEach(function (u) {
+    sh.getRange(u.row, 12).setValue(u.escalations);
+  });
+}
+
+/* ==========================================================
+ * รายงานเฝ้าระวังรายสัปดาห์
+ * ตั้ง time-driven trigger: weeklyWatchReport → Week timer (เช่น จันทร์ 08:00)
+ * สรุปข้อมูล 7 วันล่าสุด + สถานะงานค้าง แล้วบันทึกลงชีต Reports
+ * และ push สรุปให้อาจารย์ (ตัวเลขรวม ไม่ระบุรายบุคคล)
+ * ========================================================== */
+
+function weeklyWatchReport() {
+  const report = buildWatchReport(7);
+  // บันทึกประวัติรายงาน
+  getSheet(SHEETS.REPORTS).appendRow([
+    new Date(), report.periodDays,
+    report.total, report.byRisk.RED, report.byRisk.ORANGE,
+    report.byRisk.YELLOW, report.byRisk.GREEN,
+    report.cameraConflicts, report.openAlerts, report.overdue,
+    sanitize(JSON.stringify(report.byStudentYear || {})),
+  ]);
+
+  // push สรุปให้อาจารย์
+  const summaryText =
+    "📊 รายงานเฝ้าระวังสุขภาพใจ (7 วันล่าสุด)\n" +
+    "ระบบดูแลใจ วพอ.พอ.\n" +
+    "— แบบประเมินทั้งหมด: " + report.total + " ครั้ง\n" +
+    "🔴 เสี่ยงสูงสุด: " + report.byRisk.RED + "\n" +
+    "🟠 สำคัญ: " + report.byRisk.ORANGE + "\n" +
+    "🟡 ควรชวนคุย: " + report.byRisk.YELLOW + "\n" +
+    "📷 สัญญาณขัดแย้งจากกล้อง: " + report.cameraConflicts + "\n" +
+    "⏳ งานค้างทั้งหมด: " + report.openAlerts +
+    " (เกินกำหนด " + report.overdue + ")\n" +
+    "โปรดเปิด dashboard เพื่อดูรายละเอียดและติดตามเคส";
+
+  // รายงานเป็นข้อมูลไม่ฉุกเฉิน จึงยอมงดทาง LINE ก่อนถ้าโควตาใกล้หมด
+  sendAlert(summaryText, "REPORT");
+
+  // export ไฟล์รายงานเข้า Google Drive folder ที่กำหนด
+  try {
+    exportReportToDrive(report);
+  } catch (err) {
+    logError("weeklyWatchReport.export", err, "");
+  }
+  return report;
+}

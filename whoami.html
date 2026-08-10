@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>รับรหัสผู้ใช้ LINE · ระบบดูแลใจ</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  /* หน้าสำหรับอาจารย์ผู้ดูแล: เปิดครั้งเดียวเพื่อดู LINE userId ของตัวเอง
+     แล้วส่งให้ผู้ดูแลระบบกรอกลงชีต Teachers
+     ต้องเปิดจากแอป LINE เท่านั้น (ผ่าน LIFF) จึงจะดึง userId ได้ */
+  * { margin:0; padding:0; box-sizing:border-box;
+      font-family:'Sarabun','Noto Sans Thai',-apple-system,'Segoe UI',sans-serif; }
+  body { background:#0E1A14; color:#EAF0EA; min-height:100vh; padding:28px 22px;
+         padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
+  .wrap { max-width:460px; margin:0 auto; }
+  .eyebrow { font-size:12px; letter-spacing:.18em; color:#C99A2E; text-transform:uppercase; }
+  h1 { font-size:23px; font-weight:700; margin:6px 0 8px; line-height:1.4; }
+  p.lead { font-size:14.5px; color:#9fb0a4; line-height:1.7; }
+  .card { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12);
+          border-radius:18px; padding:22px; margin-top:22px; }
+  .label { font-size:12.5px; color:#9fb0a4; margin-bottom:8px; }
+  .value { font-size:16px; font-weight:600; word-break:break-all; line-height:1.6; }
+  .uid { font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:15px;
+         background:rgba(0,0,0,.35); border-radius:12px; padding:14px; margin-top:6px;
+         word-break:break-all; line-height:1.6; }
+  .btn { display:block; width:100%; border:none; border-radius:14px; padding:15px;
+         font-size:16px; font-weight:700; cursor:pointer; margin-top:14px;
+         background:#00754A; color:#fff; font-family:inherit; }
+  .btn:active { transform:scale(.98); }
+  .btn:disabled { opacity:.5; }
+  .warn { background:rgba(178,58,72,.15); border:1px solid rgba(178,58,72,.4);
+          border-radius:14px; padding:15px; margin-top:20px; font-size:14px;
+          color:#ffc9cf; line-height:1.7; }
+  .note { font-size:13px; color:#9fb0a4; line-height:1.7; margin-top:18px; }
+  .toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px);
+           background:#EAF0EA; color:#0E1A14; padding:12px 20px; border-radius:12px;
+           font-size:14px; font-weight:600; opacity:0; transition:all .3s; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">RTAFNC · ระบบดูแลใจ</div>
+  <h1>รับรหัสผู้ใช้ LINE<br>สำหรับอาจารย์ผู้ดูแล</h1>
+  <p class="lead">หน้านี้ใช้ครั้งเดียวเพื่อดูรหัสผู้ใช้ LINE ของท่าน
+    แล้วส่งให้ผู้ดูแลระบบกรอกลงทะเบียนอาจารย์ เพื่อให้ระบบส่งแจ้งเตือนถึงท่านได้</p>
+
+  <div class="card" id="card">
+    <div class="label">สถานะ</div>
+    <div class="value" id="status">กำลังเชื่อมต่อ LINE…</div>
+  </div>
+
+  <div id="result" style="display:none;">
+    <div class="card">
+      <div class="label">ชื่อบัญชี LINE</div>
+      <div class="value" id="name">—</div>
+      <div class="label" style="margin-top:18px;">รหัสผู้ใช้ (LINE userId)</div>
+      <div class="uid" id="uid">—</div>
+      <button class="btn" id="btn-copy">คัดลอกรหัสผู้ใช้</button>
+    </div>
+    <div class="note">
+      นำรหัสนี้ส่งให้ผู้ดูแลระบบ เพื่อกรอกลงชีต <strong>Teachers</strong>
+      (คอลัมน์ lineUserId) และตั้งค่า active = TRUE<br><br>
+      <strong>สำคัญ:</strong> ท่านต้องเพิ่มบัญชี LINE ของวิทยาลัยเป็นเพื่อนก่อน
+      ไม่เช่นนั้นระบบจะส่งข้อความถึงท่านไม่ได้
+    </div>
+  </div>
+
+  <div class="warn" id="warn" style="display:none;">
+    <strong>เปิดหน้านี้จากแอป LINE เท่านั้น</strong><br>
+    กรุณาเปิดลิงก์นี้ผ่านแชทในแอป LINE (ไม่ใช่เบราว์เซอร์ทั่วไป)
+    ระบบจึงจะดึงรหัสผู้ใช้ได้
+  </div>
+</div>
+
+<div class="toast" id="toast">คัดลอกแล้ว</div>
+
+<script>
+/* ใส่ LIFF ID เดียวกับหน้าแบบประเมิน — LIFF app เดียวใช้ได้หลายหน้า
+   เปิดหน้านี้ด้วย: https://liff.line.me/{LIFF_ID}/whoami.html */
+var LIFF_ID = "2010984231-Z7kbSIPp";
+
+function el(id) { return document.getElementById(id); }
+function toast(msg) {
+  var t = el("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove("show"); }, 2200);
+}
+function fail(msg) {
+  el("status").textContent = msg;
+  el("warn").style.display = "block";
+}
+
+if (!LIFF_ID) {
+  fail("ยังไม่ได้ตั้งค่า LIFF ID ในไฟล์นี้");
+} else if (typeof liff === "undefined") {
+  fail("โหลด LINE SDK ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต");
+} else {
+  liff.init({ liffId: LIFF_ID })
+    .then(function () {
+      if (!liff.isLoggedIn()) { liff.login(); return null; }
+      return liff.getProfile();
+    })
+    .then(function (p) {
+      if (!p) return;
+      el("card").style.display = "none";
+      el("result").style.display = "block";
+      el("name").textContent = p.displayName || "(ไม่ระบุชื่อ)";
+      el("uid").textContent = p.userId;
+    })
+    .catch(function (e) {
+      console.warn(e);
+      fail("เชื่อมต่อไม่สำเร็จ: " + (e && e.message ? e.message : "ไม่ทราบสาเหตุ"));
+    });
+}
+
+el("btn-copy").addEventListener("click", function () {
+  var uid = el("uid").textContent;
+  // navigator.clipboard ใช้ไม่ได้ในบางเวอร์ชันของ LINE in-app browser
+  // จึงมี fallback เป็น textarea + execCommand
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(uid)
+      .then(function () { toast("คัดลอกแล้ว"); })
+      .catch(function () { fallbackCopy(uid); });
+  } else {
+    fallbackCopy(uid);
+  }
+});
+
+function fallbackCopy(text) {
+  try {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    toast("คัดลอกแล้ว");
+  } catch (e) {
+    toast("คัดลอกไม่ได้ กรุณากดค้างที่รหัสเพื่อคัดลอก");
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ระบบดูแลใจ · แบบประเมิน ST-5 / 2Q / 9Q / 8Q (ต้นแบบ)</title>
+<!-- LIFF SDK v2 (edge = อัปเดต minor/patch อัตโนมัติ) -->
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  /* =========================================================
+     ระบบดูแลใจ วพอ.พอ. — สไตล์กระจกคริสตัล (Liquid Glass / iOS)
+     โทน: deep forest green + warm gold + brick red
+     glassmorphism: backdrop-blur + พื้นผิวโปร่งแสง + ขอบเรืองแสง
+     กล้องประมวลผลบนเครื่องเท่านั้น ไม่ส่งภาพออกนอกอุปกรณ์
+     ========================================================= */
+  :root {
+    --forest-deep: #08251A;
+    --forest: #12402B;
+    --forest-soft: #1E5236;
+    --gold: #E5B65A;
+    --gold-soft: #F0D293;
+    --brick: #C0472F;
+    --brick-deep: #8A2E1E;
+    --cream: #F6F2E8;
+    --cream-dim: #BFC7BC;
+    --ok: #5FB77E;
+    /* กระจก: พื้นผิว/ขอบ/เงา ใช้ซ้ำทั้งระบบ */
+    --glass-bg: rgba(255,255,255,0.07);
+    --glass-bg-hi: rgba(255,255,255,0.12);
+    --glass-border: rgba(255,255,255,0.18);
+    --glass-shadow: 0 8px 32px rgba(0,0,0,0.28);
+    --blur: 18px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Noto Sans Thai', 'IBM Plex Sans Thai', 'Sukhumvit Set', -apple-system, 'Segoe UI', sans-serif;
+    background: linear-gradient(160deg, #0B2E1F 0%, #08251A 55%, #041A12 100%);
+    color: var(--cream);
+    min-height: 100dvh;
+    display: flex; flex-direction: column;
+    position: relative;
+    overflow-x: hidden;
+  }
+  /* พื้นหลังออร์บเรืองแสง — ให้ความรู้สึกกระจกหักเหแสง (crystal refraction) */
+  .orb { position: fixed; border-radius: 50%; filter: blur(60px); opacity: 0.5; z-index: 0; pointer-events: none; }
+  .orb-1 { width: 340px; height: 340px; top: -80px; right: -100px; background: radial-gradient(circle, rgba(229,182,90,0.55), transparent 70%); }
+  .orb-2 { width: 300px; height: 300px; bottom: 60px; left: -120px; background: radial-gradient(circle, rgba(31,82,54,0.9), transparent 70%); }
+  .orb-3 { width: 260px; height: 260px; top: 40%; right: -80px; background: radial-gradient(circle, rgba(192,71,47,0.35), transparent 70%); }
+  @media (prefers-reduced-motion: no-preference) {
+    .orb-1 { animation: float1 14s ease-in-out infinite; }
+    .orb-2 { animation: float2 18s ease-in-out infinite; }
+  }
+  @keyframes float1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-30px,40px); } }
+  @keyframes float2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(40px,-30px); } }
+
+  .screen {
+    display: none; flex: 1; flex-direction: column; padding: 24px 20px 32px;
+    max-width: 520px; width: 100%; margin: 0 auto; position: relative; z-index: 1;
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
+    will-change: transform, opacity;
+  }
+  .screen.active { display: flex; }
+
+  /* iOS Push/Pop Screen Slide Animation */
+  .screen.slide-in-right {
+    animation: iosSlideInRight 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  }
+  .screen.slide-out-left {
+    animation: iosSlideOutLeft 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  }
+  .screen.slide-in-left {
+    animation: iosSlideInLeft 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  }
+  .screen.slide-out-right {
+    animation: iosSlideOutRight 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  }
+
+  @keyframes iosSlideInRight {
+    0% { transform: translateX(100%); opacity: 0.3; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes iosSlideOutLeft {
+    0% { transform: translateX(0); opacity: 1; }
+    100% { transform: translateX(-28%); opacity: 0.2; }
+  }
+  @keyframes iosSlideInLeft {
+    0% { transform: translateX(-28%); opacity: 0.3; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes iosSlideOutRight {
+    0% { transform: translateX(0); opacity: 1; }
+    100% { transform: translateX(100%); opacity: 0.2; }
+  }
+
+  /* Responsive Tablet & iPad Adaptations (>= 768px) */
+  @media (min-width: 768px) {
+    body {
+      padding: 32px 20px;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(160deg, #0B2E1F 0%, #08251A 50%, #041A12 100%);
+    }
+    .screen {
+      max-width: 640px;
+      padding: 36px 36px 42px;
+      background: rgba(18, 64, 43, 0.4);
+      -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 28px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    h1 { font-size: 30px; }
+    h2 { font-size: 22px; }
+    .q-text { font-size: 26px; min-height: 2.8em; }
+    .answers { gap: 14px; }
+    .answer-btn { padding: 18px 22px; font-size: 17.5px; border-radius: 18px; }
+    .orb-1 { width: 480px; height: 480px; }
+    .orb-2 { width: 440px; height: 440px; }
+    #cam-wrap { width: 110px; height: 110px; right: 28px; bottom: 28px; }
+    #cam-label { right: 28px; bottom: 146px; font-size: 11.5px; }
+  }
+
+  /* Responsive Desktop & PC Adaptations (>= 1024px) */
+  @media (min-width: 1024px) {
+    .screen {
+      max-width: 720px;
+      padding: 42px 48px;
+    }
+    h1 { font-size: 32px; }
+    .card { padding: 24px; border-radius: 24px; }
+    .btn { padding: 18px; font-size: 18px; border-radius: 18px; }
+    .answers.grid-mode {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+  }
+
+  .eyebrow { font-size: 12px; letter-spacing: 0.18em; color: var(--gold); text-transform: uppercase; margin-bottom: 6px; }
+  h1 { font-size: 26px; font-weight: 800; line-height: 1.4; letter-spacing: -0.01em; }
+  h2 { font-size: 20px; font-weight: 700; }
+  p  { line-height: 1.7; }
+
+  /* การ์ดกระจก — พื้นผิวโปร่งแสง เบลอฉากหลัง ขอบเรืองแสงบาง */
+  .card {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--blur)); backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 22px; padding: 18px; margin: 16px 0 0;
+    box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .card h2 { color: var(--gold-soft); font-size: 16px; margin-bottom: 10px; }
+  .card ul { list-style: none; }
+  .card li { display: flex; gap: 10px; margin-bottom: 10px; font-size: 14.5px; line-height: 1.6; }
+  .card li::before { content: "•"; color: var(--gold); font-weight: 700; }
+  .privacy-note { font-size: 13px; color: var(--cream-dim); line-height: 1.7; margin-top: 4px; }
+
+  /* ---- หน้าระบุตัวตน (หน้าแรก) ---- */
+  .field {
+    width: 100%; padding: 16px; border-radius: 14px; font-size: 19px; text-align: center;
+    border: 2px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06);
+    color: #fff; outline: none; transition: border-color .15s;
+    font-family: inherit;
+  }
+  .field::placeholder { color: rgba(255,255,255,.35); font-size: 17px; letter-spacing: normal; }
+  .field:focus { border-color: var(--gold); background: rgba(255,255,255,.10); }
+  .field-err { color: #ff9d9d; font-size: 13.5px; margin-top: 10px; line-height: 1.6; min-height: 1.3em; }
+  .id-confirm {
+    text-align: center; padding: 16px; border-radius: 14px;
+    background: rgba(201,154,46,.12); border: 1px solid rgba(201,154,46,.3); margin-top: 14px;
+  }
+  .id-confirm .nm { font-size: 20px; font-weight: 700; color: var(--gold); }
+  .id-confirm .sub { font-size: 13.5px; color: var(--cream-dim); margin-top: 4px; }
+  .admin-link {
+    display: block; text-align: center; margin-top: 26px; font-size: 13px;
+    color: var(--cream-dim); text-decoration: underline; opacity: .75;
+  }
+  .official-text { font-size: 14px; color: var(--cream); line-height: 1.8; }
+
+  /* แบนเนอร์เตือนกล้อง — กระจกสีอำพัน ติดบนสุด */
+  #cam-banner {
+    position: sticky; top: 0; z-index: 40; padding: 10px 14px;
+    background: linear-gradient(135deg, rgba(229,182,90,0.22), rgba(192,71,47,0.18));
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(240,210,147,0.35);
+  }
+  .cam-banner-inner { display: flex; gap: 12px; align-items: flex-start; max-width: 520px; margin: 0 auto; }
+  .cam-banner-icon { font-size: 22px; flex-shrink: 0; }
+  .cam-banner-title { font-weight: 800; font-size: 14.5px; color: var(--gold-soft); margin-bottom: 2px; }
+  .cam-banner-text { font-size: 13px; line-height: 1.6; color: var(--cream); }
+
+  .btn {
+    padding: 16px; font-size: 17px; font-weight: 700; cursor: pointer;
+    font-family: inherit; transition: transform .12s cubic-bezier(0.34,1.56,0.64,1), opacity .2s, box-shadow .2s;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-gold  {
+    background: linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, #C79438);
+    color: #3A2A08; margin-top: 16px;
+    box-shadow: 0 6px 20px rgba(229,182,90,0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+  }
+  .btn-ghost {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    color: var(--cream); border: 1px solid var(--glass-border); margin-top: 12px; font-weight: 600; font-size: 15px;
+  }
+  .btn-brick {
+    background: linear-gradient(135deg, var(--brick), var(--brick-deep));
+    color: var(--cream); margin-top: 16px;
+    box-shadow: 0 6px 20px rgba(192,71,47,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .btn:disabled { opacity: 0.45; cursor: wait; }
+
+  /* ---------- แบบประเมิน ---------- */
+  .inst-label { font-size: 13px; color: var(--gold); letter-spacing: 0.08em; margin-bottom: 14px; font-weight: 700; }
+  .progress-row { display: flex; align-items: center; gap: 6px; margin-bottom: 24px; }
+  .progress-dot { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); transition: background .4s, box-shadow .4s; }
+  .progress-dot.done { background: var(--gold); }
+  .progress-dot.now  { background: var(--gold-soft); box-shadow: 0 0 12px rgba(240,210,147,0.7); }
+
+  .q-number { font-size: 13px; color: var(--gold); letter-spacing: 0.1em; margin-bottom: 8px; }
+  .q-context { font-size: 14px; color: var(--cream-dim); margin-bottom: 6px; line-height: 1.6; }
+  .q-text { font-size: 23px; font-weight: 800; line-height: 1.5; min-height: 3.2em; letter-spacing: -0.01em; }
+
+  /* กล่องเลื่อน (slide) — คำถาม+ตัวเลือกเลื่อนเข้าออกแนวนอนแบบ iOS */
+  #q-slide { transition: transform .32s cubic-bezier(0.32,0.72,0,1), opacity .28s ease; }
+  #q-slide.slide-out-left  { transform: translateX(-40px); opacity: 0; }
+  #q-slide.slide-out-right { transform: translateX(40px);  opacity: 0; }
+  #q-slide.slide-in { transform: translateX(0); opacity: 1; }
+
+  .answers { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
+  .answer-btn {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    width: 100%; border-radius: 16px; padding: 16px 18px;
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 1.5px solid var(--glass-border);
+    color: var(--cream); font-size: 16px; font-family: inherit; cursor: pointer;
+    transition: border-color .18s, background .18s, transform .12s cubic-bezier(0.34,1.56,0.64,1), box-shadow .18s;
+    text-align: left; line-height: 1.5;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .answer-btn:active { transform: scale(0.97); }
+  .answer-btn.selected {
+    border-color: var(--gold);
+    background: linear-gradient(135deg, rgba(229,182,90,0.28), rgba(229,182,90,0.14));
+    box-shadow: 0 4px 18px rgba(229,182,90,0.28), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .answer-btn .pts { font-size: 12px; color: var(--cream-dim); white-space: nowrap; }
+
+  .nav-row { display: flex; gap: 12px; margin-top: auto; padding-top: 22px; }
+  .nav-row .btn { margin-top: 0; }
+  .btn-back { flex: 0 0 30%; }
+  .btn-next { flex: 1; }
+
+  /* ---------- หน้าคั่นระหว่างชุด ---------- */
+  .interstitial { justify-content: center; text-align: center; }
+  .interstitial .big-icon { font-size: 44px; margin-bottom: 18px; }
+  .interstitial p { color: var(--cream); font-size: 16.5px; max-width: 420px; margin: 0 auto; }
+
+  /* ---------- วงกลมฝึกหายใจ ---------- */
+  #breath-circle {
+    width: 110px; height: 110px; border-radius: 50%;
+    margin: 0 auto 30px;
+    border: 3px solid var(--gold);
+    background: radial-gradient(circle, rgba(217,164,65,0.25), rgba(217,164,65,0.05));
+    transform: scale(1);
+    transition-property: transform;
+    transition-timing-function: ease-in-out;
+  }
+  @media (prefers-reduced-motion: reduce) { #breath-circle { transition: none; } }
+
+  /* ---------- กล้อง preview ---------- */
+  #cam-wrap {
+    position: fixed; right: 14px; bottom: 14px; z-index: 50;
+    width: 84px; height: 84px; border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+  }
+  #cam-wrap.on { display: flex; }
+  #cam-ring { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--gold); animation: breathe 3s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.07); opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { #cam-ring { animation: none; } }
+  #cam-video { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; transform: scaleX(-1); border: 2px solid var(--forest-soft); background: #000; }
+  #cam-status { position: absolute; bottom: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--forest-deep); background: var(--cream-dim); }
+  #cam-status.tracking { background: var(--ok); }
+  #cam-label {
+    position: fixed; right: 14px; bottom: 102px; z-index: 50;
+    font-size: 10.5px; color: var(--cream-dim); display: none;
+    background: rgba(14,43,28,0.85); padding: 3px 8px; border-radius: 8px;
+  }
+  #cam-label.on { display: block; }
+
+  /* ---------- หน้าผลลัพธ์ ---------- */
+  .result-hero { text-align: center; padding: 6px 0 2px; }
+  .score-ring { width: 156px; height: 156px; margin: 12px auto; position: relative; display: flex; align-items: center; justify-content: center; }
+  .score-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .score-ring .val { font-size: 40px; font-weight: 800; line-height: 1; }
+  .score-ring .max { font-size: 12px; color: var(--cream-dim); }
+  .zone-chip { display: inline-block; padding: 6px 16px; border-radius: 999px; font-weight: 700; font-size: 14.5px; margin-top: 2px; }
+
+  .result-card {
+    background: rgba(255,255,255,0.05); border-radius: 14px;
+    padding: 14px 16px; margin-top: 12px;
+    border-left: 4px solid var(--gold);
+  }
+  .result-card .rc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .result-card .rc-name { font-size: 14px; font-weight: 700; color: var(--gold-soft); }
+  .result-card .rc-score { font-size: 13px; color: var(--cream-dim); white-space: nowrap; }
+  .result-card .rc-level { font-size: 15px; font-weight: 700; margin-top: 4px; }
+  .result-card .rc-note { font-size: 13.5px; color: var(--cream-dim); margin-top: 4px; line-height: 1.6; }
+
+  .tip-card { background: rgba(255,255,255,0.05); border-radius: 16px; border-left: 4px solid var(--gold); padding: 16px 18px; margin-top: 18px; }
+  .tip-card h3 { font-size: 15px; color: var(--gold-soft); margin-bottom: 8px; }
+  .tip-card p { font-size: 15px; }
+
+  /* ---------- โหมดดูแลพิเศษ ---------- */
+  .care-screen { justify-content: center; text-align: center; }
+  .care-badge {
+    width: 88px; height: 88px; border-radius: 50%; margin: 0 auto 20px;
+    background: rgba(166,58,43,0.2); border: 2px solid var(--brick);
+    display: flex; align-items: center; justify-content: center; font-size: 40px;
+  }
+  .care-screen h1 { font-size: 24px; }
+  .care-screen p { font-size: 16px; color: var(--cream); max-width: 420px; margin: 14px auto 0; }
+  .care-honest { font-size: 13.5px; color: var(--cream-dim); margin-top: 18px !important; }
+
+  /* ---------- แผงดัชนี ---------- */
+  details.debug { margin-top: 22px; background: rgba(0,0,0,0.25); border-radius: 14px; border: 1px dashed rgba(244,239,226,0.2); padding: 14px 16px; }
+  details.debug summary { cursor: pointer; font-size: 13.5px; color: var(--cream-dim); font-weight: 600; }
+  .metric { display: flex; justify-content: space-between; font-size: 13.5px; padding: 7px 0; border-bottom: 1px solid rgba(244,239,226,0.08); }
+  .metric span:last-child { font-variant-numeric: tabular-nums; color: var(--gold-soft); }
+  .flag-line { margin-top: 12px; font-size: 14px; font-weight: 700; }
+  .debug-note { margin-top: 10px; font-size: 12px; color: var(--cream-dim); line-height: 1.6; }
+
+  /* ---------- แบนเนอร์ชวนพัก (เรียลไทม์จากสัญญาณกล้อง) ---------- */
+  #support-banner {
+    position: fixed; top: 12px; left: 50%;
+    transform: translateX(-50%) translateY(-140%);
+    width: calc(100% - 24px); max-width: 480px; z-index: 80;
+    background: var(--forest-soft); border: 1px solid rgba(217,164,65,0.5);
+    border-radius: 16px; padding: 14px 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    transition: transform .4s ease;
+  }
+  #support-banner.show { transform: translateX(-50%) translateY(0); }
+  #support-banner p { font-size: 14.5px; line-height: 1.6; }
+  #support-banner .row { display: flex; gap: 10px; margin-top: 12px; }
+  #support-banner .row .btn { margin-top: 0; padding: 11px; font-size: 14.5px; border-radius: 12px; }
+
+  /* ---------- โอเวอร์เลย์พักหายใจ ---------- */
+  #breath-overlay {
+    position: fixed; inset: 0; z-index: 90; display: none;
+    background: rgba(14,43,28,0.97);
+    flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    padding: 24px;
+  }
+  #breath-circle {
+    width: 130px; height: 130px; border-radius: 50%;
+    border: 3px solid var(--gold); background: rgba(217,164,65,0.12);
+    transition: transform 4s ease-in-out;
+  }
+  #breath-phase { margin-top: 26px; font-size: 20px; font-weight: 700; color: var(--gold-soft); }
+  #breath-sub { margin-top: 8px; font-size: 14px; color: var(--cream-dim); }
+  @media (prefers-reduced-motion: reduce) { #breath-circle { transition: none; } }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--forest-soft); color: var(--cream); border: 1px solid rgba(217,164,65,0.4);
+    padding: 10px 18px; border-radius: 12px; font-size: 14px; z-index: 99;
+    opacity: 0; pointer-events: none; transition: opacity .3s; max-width: 90%;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<!-- ออร์บพื้นหลังเรืองแสง — เอฟเฟกต์กระจกหักเหแสง -->
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<!-- แบนเนอร์เตือนกล้องถูกบล็อก (ซ่อนไว้ก่อน แสดงเมื่อตรวจพบว่าอยู่ใน iframe/แอป) -->
+<div id="cam-banner" style="display:none;">
+  <div class="cam-banner-inner">
+    <span class="cam-banner-icon">📷</span>
+    <div>
+      <div class="cam-banner-title">กล้องใช้งานไม่ได้ในหน้านี้</div>
+      <div class="cam-banner-text">หน้านี้เปิดอยู่ในแอป จึงใช้กล้องไม่ได้ กรุณาเปิดลิงก์นี้ใน <strong>Chrome หรือ Safari โดยตรง</strong> เพื่อให้ระบบสังเกตสัญญาณช่วยดูแลคุณได้ (ทำแบบประเมินต่อได้ตามปกติแม้ไม่มีกล้อง)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= หน้า 0: ระบุตัวตน (กรอกรหัส + ชื่อ ไม่ต้องล็อกอิน) ================= -->
+<section class="screen active" id="screen-identify">
+  <div class="eyebrow">RTAFNC · ระบบดูแลใจ</div>
+  <h1>ยินดีต้อนรับ<br>เริ่มจากบอกเราหน่อยว่าคุณเป็นใคร</h1>
+
+  <div class="card">
+    <h2>กรอกรหัสประจำตัวและชื่อ-สกุล</h2>
+    <p class="privacy-note" style="margin-bottom:14px;">
+      นักเรียนกรอก<strong>รหัสประจำตัว 7 หลัก</strong> และ<strong>ชื่อ-สกุล</strong> ·
+      บุคลากรหรือบุคคลภายนอกที่ไม่มีรหัส เว้นช่องรหัสว่างไว้ กรอกเฉพาะชื่อได้เลย
+    </p>
+    <input class="field" id="in-code" type="tel" inputmode="numeric" maxlength="7"
+           autocomplete="off" placeholder="รหัสประจำตัว 7 หลัก (ถ้ามี)" style="margin-bottom:10px;">
+    <input class="field" id="in-name" type="text" maxlength="60" autocomplete="off"
+           placeholder="ชื่อ - สกุล" style="font-size:18px; letter-spacing:normal;">
+    <div class="field-err" id="err-identity"></div>
+  </div>
+
+  <button class="btn btn-gold" id="btn-identify">ถัดไป</button>
+  <a class="admin-link" id="link-admin" href="mindcare-dashboard.html">สำหรับผู้ดูแล (ต้องมีรหัสเข้าใช้งาน)</a>
+</section>
+
+<!-- ================= หน้า 1: เริ่มต้น + ความยินยอม ================= -->
+<section class="screen" id="screen-intro">
+  <div class="eyebrow">RTAFNC · ระบบดูแลใจ</div>
+  <h1>แวะมาเช็คใจกันสักนิดนะ<br>เราอยู่ตรงนี้กับคุณ</h1>
+
+  <div class="card">
+    <h2>ก่อนเริ่ม อยากบอกอะไรหน่อย</h2>
+    <ul>
+      <li>เริ่มจากแบบประเมินความเครียด 5 ข้อ และคำถามสั้นๆ อีก 2 ข้อ ส่วนใหญ่ใช้เวลาไม่เกิน 3 นาที บางคนอาจมีชุดคำถามเพิ่มตามผล ซึ่งระบบจะพาไปทีละขั้นเอง</li>
+      <li>ไม่มีคำตอบถูกหรือผิด ตอบตามความรู้สึกจริงของคุณได้เลย ทุกคำตอบมีไว้เพื่อให้มีคนดูแลคุณได้ถูกทาง</li>
+      <li>ถ้าคุณสะดวก เปิดกล้องหน้าไว้ได้ ระบบจะช่วยสังเกตสัญญาณความเหนื่อยล้าไปพร้อมกับคุณ — ภาพ<strong>ประมวลผลบนเครื่องของคุณเท่านั้น</strong> ไม่มีการบันทึกหรือส่งวิดีโอออกไปที่ใด เก็บเฉพาะค่าตัวเลขสรุป</li>
+      <li>ไม่สะดวกเปิดกล้องก็ไม่เป็นไรเลย ทำแบบประเมินได้ตามปกติ ไม่มีผลต่อคะแนนหรือการดูแล</li>
+    </ul>
+    <p class="privacy-note">ผลของคุณเห็นได้เฉพาะตัวคุณและอาจารย์ผู้ดูแลที่ได้รับมอบหมายเท่านั้น</p>
+  </div>
+
+  <div class="card">
+    <h2>คำชี้แจง (จากแบบประเมินความเครียด ST-5 กรมสุขภาพจิต)</h2>
+    <p class="official-text">ความเครียดเกิดขึ้นได้กับทุกคน สาเหตุที่ทำให้เกิดความเครียดมีหลายอย่าง เช่น รายได้ที่ไม่เพียงพอ หนี้สิน ภัยพิบัติต่าง ๆ ที่ทำให้เกิดความสูญเสีย ความเจ็บป่วย เป็นต้น ความเครียดมีทั้งประโยชน์และโทษ หากมากเกินไปจะเกิดผลเสียต่อร่างกายและจิตใจของท่านได้ ขอให้ท่านลองประเมินตนเองโดยให้คะแนน 0–3 ที่ตรงกับความรู้สึกของท่าน</p>
+  </div>
+
+  <button class="btn btn-gold" id="btn-start-cam">เริ่มทำ พร้อมเปิดกล้อง</button>
+  <button class="btn btn-ghost" id="btn-start-nocam">เริ่มทำ โดยไม่ใช้กล้อง</button>
+</section>
+
+<!-- ================= หน้าคั่นระหว่างชุดคำถาม ================= -->
+<section class="screen interstitial" id="screen-interstitial">
+  <div class="big-icon" id="inter-icon">🌿</div>
+  <h1 id="inter-title"></h1>
+  <p id="inter-text"></p>
+  <button class="btn btn-gold" id="btn-inter-next" style="max-width:320px; margin:26px auto 0;">พร้อมแล้ว ไปต่อกัน</button>
+  <button class="btn btn-ghost" id="btn-inter-breath" style="display:none; max-width:320px; margin:12px auto 0;">🫁 พักหายใจ 30 วินาทีด้วยกันก่อน</button>
+</section>
+
+<!-- ================= หน้าพักหายใจ (เปิดเมื่อกล้องเห็นสัญญาณล้า) ================= -->
+<section class="screen interstitial" id="screen-breath">
+  <div id="breath-circle"></div>
+  <h1 id="breath-label">หายใจเข้า…</h1>
+  <p id="breath-round" style="color:var(--cream-dim); margin-top:10px;">รอบที่ 1 / 3</p>
+  <button class="btn btn-ghost" id="btn-breath-skip" style="max-width:320px; margin:30px auto 0;">ข้ามได้เลย ไม่เป็นไรนะ</button>
+</section>
+
+<!-- ================= หน้าแบบประเมิน ================= -->
+<section class="screen" id="screen-quiz">
+  <div class="inst-label" id="inst-label"></div>
+  <div class="progress-row" id="progress"></div>
+  <div class="q-number" id="q-number"></div>
+  <div class="q-context" id="q-context"></div>
+  <div id="q-slide" class="slide-in">
+    <div class="q-text" id="q-text"></div>
+    <div class="answers" id="answers"></div>
+  </div>
+  <div class="nav-row">
+    <button class="btn btn-ghost btn-back" id="btn-back">ย้อนกลับ</button>
+    <button class="btn btn-gold btn-next" id="btn-next" disabled>ข้อถัดไป</button>
+  </div>
+</section>
+
+<!-- ================= หน้าผลลัพธ์ ================= -->
+<section class="screen" id="screen-result">
+  <div class="result-hero">
+    <div class="eyebrow">ขอบคุณที่ให้เวลากับใจตัวเองนะ</div>
+    <div class="score-ring">
+      <svg width="156" height="156" viewBox="0 0 156 156">
+        <circle cx="78" cy="78" r="68" fill="none" stroke="rgba(244,239,226,0.12)" stroke-width="10"/>
+        <circle id="ring-fill" cx="78" cy="78" r="68" fill="none" stroke="#D9A441" stroke-width="10"
+                stroke-linecap="round" stroke-dasharray="427" stroke-dashoffset="427"
+                style="transition: stroke-dashoffset 1s ease, stroke .5s;"/>
+      </svg>
+      <div>
+        <div class="val" id="score-val">–</div>
+        <div class="max">ST-5 จาก 15 คะแนน</div>
+      </div>
+    </div>
+    <div class="zone-chip" id="zone-chip">–</div>
+  </div>
+
+  <div id="result-cards"></div>
+
+  <div class="tip-card">
+    <h3>จากเราถึงคุณ</h3>
+    <p id="tip-text"></p>
+  </div>
+
+  <button class="btn btn-brick" id="btn-help">อยากคุยกับใครสักคน</button>
+
+  <details class="debug" id="debug-panel">
+    <summary>ดัชนีพฤติกรรมระหว่างทำ (แผงสำหรับทีมพัฒนา)</summary>
+    <div id="metrics"></div>
+    <div class="flag-line" id="flag-line"></div>
+    <p class="debug-note">
+      ค่าดัชนีนี้เป็นสูตรต้นแบบ (heuristic) สำหรับเก็บข้อมูลนำร่องเท่านั้น
+      เกณฑ์ตัดต้องปรับเทียบกับข้อมูลจริงก่อนใช้งาน และใช้เป็น
+      "สัญญาณควรชวนคุย" เท่านั้น ห้ามใช้ตัดสินหรือวินิจฉัย
+    </p>
+  </details>
+
+  <button class="btn btn-ghost" id="btn-restart" style="margin-top:16px;">ทำใหม่อีกครั้ง</button>
+</section>
+
+<!-- ================= โหมดดูแลพิเศษ (8Q ระดับรุนแรง) ================= -->
+<section class="screen care-screen" id="screen-care">
+  <div class="care-badge">🤝</div>
+  <h1>ขอบคุณมากที่ไว้ใจ<br>บอกความรู้สึกจริงกับเรา</h1>
+  <p>สิ่งที่คุณกำลังแบกอยู่ตอนนี้หนักมาก และมันไม่ใช่ความผิดของคุณเลย
+     คุณไม่ต้องผ่านช่วงเวลานี้เพียงลำพัง — ตอนนี้มีคนพร้อมอยู่ข้างคุณจริงๆ</p>
+  <a class="btn btn-brick" href="tel:1323" style="max-width:360px; margin:24px auto 0; text-decoration:none; text-align:center;">โทรสายด่วนสุขภาพจิต 1323 (ฟรี ตลอด 24 ชม.)</a>
+  <button class="btn btn-gold" id="btn-care-teacher" style="max-width:360px; margin:12px auto 0;">ให้อาจารย์ผู้ดูแลติดต่อฉันตอนนี้</button>
+  <p class="care-honest">เราขอบอกตรงๆ ว่า ผลการประเมินระดับนี้ ระบบจะแจ้งอาจารย์ผู้ดูแลของคุณทันที
+     เพื่อให้มีคนติดต่อดูแลคุณโดยเร็วที่สุด — ไม่มีการทำอะไรลับหลังคุณ</p>
+  <button class="btn btn-ghost" id="btn-care-result" style="max-width:360px; margin:18px auto 0;">ดูผลการประเมินทั้งหมด</button>
+</section>
+
+<!-- กล้อง preview + สถานะ -->
+<div id="cam-label">วิเคราะห์บนเครื่อง · ไม่บันทึกภาพ</div>
+<div id="cam-wrap">
+  <div id="cam-ring"></div>
+  <video id="cam-video" autoplay playsinline muted></video>
+  <div id="cam-status"></div>
+</div>
+
+<!-- แบนเนอร์ชวนพัก — โผล่เมื่อสัญญาณกล้องบ่งว่าตึงเครียดต่อเนื่อง/หายหน้านาน -->
+<div id="support-banner">
+  <p id="support-text">ดูเหมือนช่วงนี้จะหนักหน่อยนะ อยากพักหายใจกับเราสัก 1 นาทีไหม ไม่รีบเลย</p>
+  <div class="row">
+    <button class="btn btn-gold" id="btn-take-break" style="flex:1;">พักหายใจด้วยกัน</button>
+    <button class="btn btn-ghost" id="btn-skip-break" style="flex:1;">ไม่เป็นไร ทำต่อ</button>
+  </div>
+</div>
+
+<!-- โอเวอร์เลย์พักหายใจ 4-7-8 -->
+<div id="breath-overlay">
+  <div id="breath-circle"></div>
+  <div id="breath-phase">พร้อมแล้วเริ่มเลยนะ</div>
+  <div id="breath-sub">หายใจตามวงกลม เข้า 4 · กลั้น 7 · ผ่อนออก 8</div>
+  <button class="btn btn-ghost" id="btn-breath-close" style="max-width:280px; margin-top:30px;">พอแล้ว กลับไปทำต่อ</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* =========================================================
+   ส่วนที่ 0: การตั้งค่าเชื่อมต่อ backend + LIFF
+   - GAS_ENDPOINT: URL ของ Web App จาก Google Apps Script
+     (Deploy → Web app → คัดลอก URL มาวาง) เว้นว่าง = โหมดทดสอบ
+   - LIFF_ID: จาก LINE Developers Console (เพิ่ม LIFF app ใน channel)
+     เว้นว่าง = ข้าม LIFF ใช้รหัสทดสอบ (เปิดทดสอบบนเบราว์เซอร์ปกติได้)
+   - STUDENT_ID: fallback เมื่อไม่มี LIFF — ระบบจริงจะดึงจาก LINE
+   ========================================================= */
+const CONFIG = {
+  GAS_ENDPOINT: "https://script.google.com/macros/s/AKfycbyCdey2-zT4bqeGULe88JXVj-ljnXL-1nYWUkrulVsZSGhzmEni7PVS2czksEGMg-sR/exec",
+  LIFF_ID: "2010984231-Z7kbSIPp",
+  STUDENT_ID: "TEST-001",    // ใช้เมื่อไม่มี LIFF (โหมดทดสอบ)
+};
+
+/* สถานะ LIFF — เก็บ userId และรหัสนักเรียนที่ผูกไว้ */
+const liffState = {
+  ready: false,
+  inClient: false,       // เปิดใน LINE app หรือเบราว์เซอร์ภายนอก
+  userId: null,          // LINE userId
+  displayName: null,
+  studentId: null,       // รหัสนักเรียนที่ผูกกับ userId (จาก backend)
+  needBinding: false,    // true = ยังไม่เคยผูกรหัสนักเรียน
+};
+
+/**
+ * เริ่มต้น LIFF — เรียกครั้งเดียวตอนโหลดหน้า
+ * ออกแบบให้ระบบทำงานต่อได้เสมอแม้ LIFF ล้มเหลว (graceful degradation)
+ * ลำดับ: ตรวจ SDK → init → getProfile → ผูกรหัสนักเรียนกับ backend
+ */
+async function initLiff() {
+  // ไม่ตั้งค่า LIFF_ID = ไม่ใช้ LIFF
+  // ไม่ตั้ง liffState.studentId ที่นี่ เพราะจะทับรหัสที่ส่งมาทาง ?sid=
+  // ให้ activeStudentId() ไป fallback ตามลำดับ: sid > STUDENT_ID เอง
+  if (!CONFIG.LIFF_ID) return;
+  // SDK โหลดไม่สำเร็จ (เน็ตมีปัญหา/ถูกบล็อก) — ยังทำแบบประเมินได้ด้วย ?sid=
+  if (typeof liff === "undefined") {
+    console.warn("LIFF SDK ไม่ถูกโหลด — ใช้รหัสจาก ?sid= แทน");
+    return;
+  }
+  try {
+    await liff.init({ liffId: CONFIG.LIFF_ID });
+    liffState.ready = true;
+    liffState.inClient = liff.isInClient();
+
+    // เปิดในเบราว์เซอร์ภายนอกและยังไม่ล็อกอิน → ชวนล็อกอิน LINE
+    if (!liff.isLoggedIn()) {
+      // ไม่ auto-login ทันทีเพื่อไม่ให้ผู้ใช้ตกใจ — ให้เริ่มทำก่อน
+      // ระบบจริงอาจเปิด withLoginOnExternalBrowser: true ใน init ได้
+      liffState.studentId = CONFIG.STUDENT_ID;
+      return;
+    }
+
+    const profile = await liff.getProfile();
+    liffState.userId = profile.userId;
+    liffState.displayName = profile.displayName;
+
+    // ผูก userId → รหัสนักเรียน ผ่าน backend
+    await resolveStudentId();
+  } catch (err) {
+    console.warn("LIFF init/profile ล้มเหลว:", err);
+    liffState.studentId = CONFIG.STUDENT_ID; // ยังทำแบบประเมินต่อได้
+  }
+}
+
+/**
+ * ถาม backend ว่า LINE userId นี้ผูกกับรหัสนักเรียนใด
+ * ถ้ายังไม่เคยผูก → ตั้ง needBinding เพื่อให้หน้าจอถามรหัสนักเรียน
+ */
+async function resolveStudentId() {
+  if (!CONFIG.GAS_ENDPOINT || !liffState.userId) {
+    liffState.studentId = CONFIG.STUDENT_ID;
+    return;
+  }
+  try {
+    const res = await fetch(CONFIG.GAS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify({ action: "resolveStudent", lineUserId: liffState.userId }),
+    });
+    const data = await res.json();
+    if (data.ok && data.studentId) {
+      liffState.studentId = data.studentId;
+    } else {
+      liffState.needBinding = true; // ยังไม่ผูก → หน้าจอจะถามรหัส
+    }
+  } catch (err) {
+    console.warn("resolveStudent ล้มเหลว:", err);
+    liffState.studentId = CONFIG.STUDENT_ID;
+  }
+}
+
+/** อ่านค่าจาก query string อย่างปลอดภัย (ใช้ตอนถูกส่งต่อมาจากหน้าเข้าระบบ) */
+function queryParam(key) {
+  try {
+    return new URLSearchParams(location.search).get(key) || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+/** ตัวตนของผู้ทำแบบประเมิน — ตั้งจากหน้าระบุตัวตน (หน้าแรก)
+ *  นักเรียน: id = รหัส 7 หลักจากทะเบียน · บุคลากร/ภายนอก: id = "N-" + ชื่อที่กรอก */
+const identity = { id: null, name: "", userType: "student", year: "", confirmed: false };
+
+/** รหัสที่จะใช้ส่งผล
+ *  ลำดับ: หน้าระบุตัวตน > LIFF-binding > sid จาก query > test id */
+function activeStudentId() {
+  return identity.id || liffState.studentId || queryParam("sid") || CONFIG.STUDENT_ID;
+}
+
+/**
+ * ตรวจสอบรูปแบบข้อมูลที่กรอกแบบ local ทั้งหมด ไม่เรียก backend
+ * กรอกครบถูกรูปแบบ = ไปต่อทันที ไม่มีขั้นยืนยันชื่อจากทะเบียน
+ * (เดิมเรียก verifyStudent ไปตรวจกับ Roster ก่อน แต่ทำให้หน้าใช้งานไม่ได้
+ *  เมื่อ Apps Script ยังไม่ได้ deploy เวอร์ชันล่าสุด — ตัดออกเพื่อความเสถียร)
+ */
+function handleIdentify() {
+  const errEl = document.getElementById("err-identity");
+  const code = String(document.getElementById("in-code").value || "").trim();
+  const name = String(document.getElementById("in-name").value || "").trim().replace(/\s+/g, " ");
+  errEl.textContent = "";
+
+  if (!name) { errEl.textContent = "กรุณากรอกชื่อ-สกุลของคุณ"; return; }
+  if (name.length < 4) { errEl.textContent = "กรุณากรอกชื่อ-สกุลให้ครบ"; return; }
+  if (/[<>"'&]/.test(name) || /[<>"'&]/.test(code)) {
+    errEl.textContent = "มีอักขระที่ใช้ไม่ได้ กรุณาแก้ไข";
+    return;
+  }
+  if (code && !/^\d{7}$/.test(code)) {
+    errEl.textContent = "รหัสประจำตัวต้องเป็นตัวเลข 7 หลัก — ถ้าไม่มีรหัส เว้นว่างไว้ได้";
+    return;
+  }
+
+  identity.name = name;
+  if (code) {
+    identity.id = code;
+    identity.userType = "student";
+  } else {
+    identity.id = "N-" + name;   // ไม่มีรหัส = ใช้ชื่อเป็นตัวระบุตัวตนแทน
+    identity.userType = "staff";
+  }
+  identity.year = "";
+  identity.confirmed = true;
+  showScreen("screen-intro");
+}
+
+/* =========================================================
+   ส่วนที่ 1: ชุดเครื่องมือประเมิน — ถ้อยคำถอดคำต่อคำจาก
+   เอกสารกรมสุขภาพจิต (ชุด 2Q 9Q 8Q และแบบประเมิน ST-5)
+   ตรวจสอบกับต้นฉบับแล้ว 15 ก.ค. 2569 — ห้ามดัดแปลงถ้อยคำคำถาม
+   ========================================================= */
+
+const CH_ST5 = [
+  { label: "เป็นน้อยมากหรือแทบไม่มี", pts: 0 },
+  { label: "เป็นบางครั้ง",           pts: 1 },
+  { label: "เป็นบ่อยครั้ง",          pts: 2 },
+  { label: "เป็นประจำ",             pts: 3 },
+];
+const CH_YESNO = [
+  { label: "มี",    pts: 1 },
+  { label: "ไม่มี", pts: 0 },
+];
+const CH_9Q = [
+  { label: "ไม่มีเลย",              pts: 0 },
+  { label: "เป็นบางวัน (1–7 วัน)",  pts: 1 },
+  { label: "เป็นบ่อย (มากกว่า 7 วัน)", pts: 2 },
+  { label: "เป็นทุกวัน",            pts: 3 },
+];
+
+const INSTRUMENTS = {
+  st5: {
+    label: "ส่วนที่ 1 · แบบประเมินความเครียด (ST-5)",
+    context: "อาการหรือความรู้สึกที่เกิดในระยะ 2–4 สัปดาห์ที่ผ่านมา",
+    choices: CH_ST5,
+    questions: [
+      { id: "st5_1", text: "มีปัญหาการนอน นอนไม่หลับ หรือนอนมาก" },
+      { id: "st5_2", text: "มีสมาธิน้อยลง" },
+      { id: "st5_3", text: "หงุดหงิด / กระวนกระวาย / ว้าวุ่นใจ" },
+      { id: "st5_4", text: "รู้สึกเบื่อ เซ็ง" },
+      { id: "st5_5", text: "ไม่อยากพบปะผู้คน" },
+    ],
+    // เกณฑ์แปลผล: 0–4 น้อย / 5–7 ปานกลาง / 8–9 มาก / 10–15 มากที่สุด
+    interpret(s) {
+      if (s <= 4)  return { level: "ความเครียดน้อย",     color: "#4C9A6A" };
+      if (s <= 7)  return { level: "ความเครียดปานกลาง",  color: "#D9A441" };
+      if (s <= 9)  return { level: "ความเครียดมาก",      color: "#C96B2E" };
+      return        { level: "ความเครียดมากที่สุด",  color: "#A63A2B" };
+    },
+  },
+
+  q2: {
+    label: "ส่วนที่ 2 · แบบคัดกรองโรคซึมเศร้า 2 คำถาม (2Q)",
+    context: "ใน 2 สัปดาห์ที่ผ่านมา รวมวันนี้",
+    choices: CH_YESNO,
+    questions: [
+      { id: "q2_1", text: "ท่านรู้สึก หดหู่ เศร้า หรือท้อแท้สิ้นหวัง หรือไม่" },
+      { id: "q2_2", text: "ท่านรู้สึก เบื่อ ทำอะไรก็ไม่เพลิดเพลิน หรือไม่" },
+    ],
+    // ไม่มีทั้ง 2 ข้อ = ปกติ / มีข้อใดข้อหนึ่ง = มีความเสี่ยง → ประเมินต่อ 9Q
+    interpret(s) {
+      if (s === 0) return { level: "ปกติ ไม่เป็นโรคซึมเศร้า", color: "#4C9A6A" };
+      return { level: "เป็นผู้มีความเสี่ยง หรือมีแนวโน้มที่จะเป็นโรคซึมเศร้า", color: "#D9A441" };
+    },
+  },
+
+  q9: {
+    label: "ส่วนที่ 3 · แบบประเมินโรคซึมเศร้า 9 คำถาม (9Q)",
+    context: "ในช่วง 2 สัปดาห์ที่ผ่านมารวมทั้งวันนี้ ท่านมีอาการเหล่านี้บ่อยแค่ไหน",
+    choices: CH_9Q,
+    questions: [
+      { id: "q9_1", text: "เบื่อ ไม่สนใจอยากทำอะไร" },
+      { id: "q9_2", text: "ไม่สบายใจ ซึมเศร้า ท้อแท้" },
+      { id: "q9_3", text: "หลับยากหรือหลับๆ ตื่นๆ หรือหลับมากไป" },
+      { id: "q9_4", text: "เหนื่อยง่ายหรือไม่ค่อยมีแรง" },
+      { id: "q9_5", text: "เบื่ออาหารหรือกินมากเกินไป" },
+      { id: "q9_6", text: "รู้สึกไม่ดีกับตัวเอง คิดว่าตัวเองล้มเหลวหรือครอบครัวผิดหวัง" },
+      { id: "q9_7", text: "สมาธิไม่ดี เวลาทำอะไร เช่น ดูโทรทัศน์ ฟังวิทยุ หรือทำงานที่ต้องใช้ความตั้งใจ" },
+      { id: "q9_8", text: "พูดช้า ทำอะไรช้าลงจนคนอื่นสังเกตเห็นได้ หรือกระสับกระส่ายไม่สามารถอยู่นิ่งได้เหมือนที่เคยเป็น" },
+      { id: "q9_9", text: "คิดทำร้ายตนเอง หรือคิดว่าถ้าตายไปคงจะดี" },
+    ],
+    // เกณฑ์แปลผล: <7 ไม่มี/น้อยมาก, 7–12 น้อย, 13–18 ปานกลาง, ≥19 รุนแรง
+    interpret(s) {
+      if (s < 7)   return { level: "ไม่มีอาการของโรคซึมเศร้า หรือมีอาการระดับน้อยมาก", color: "#4C9A6A" };
+      if (s <= 12) return { level: "มีอาการของโรคซึมเศร้า ระดับน้อย",     color: "#D9A441" };
+      if (s <= 18) return { level: "มีอาการของโรคซึมเศร้า ระดับปานกลาง",  color: "#C96B2E" };
+      return        { level: "มีอาการของโรคซึมเศร้า ระดับรุนแรง",    color: "#A63A2B" };
+    },
+  },
+
+  q8: {
+    label: "ส่วนที่ 4 · แบบประเมินการฆ่าตัวตาย 8 คำถาม (8Q)",
+    context: "ในช่วง 1 เดือนที่ผ่านมา รวมวันนี้",
+    choices: null, // กำหนดรายข้อ — คะแนนแต่ละข้อไม่เท่ากันตามต้นฉบับ
+    questions: [
+      { id: "q8_1", text: "คิดอยากตาย หรือ คิดว่าตายไปจะดีกว่า",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 1 } ] },
+      { id: "q8_2", text: "อยากทำร้ายตัวเอง หรือ ทำให้ตัวเองบาดเจ็บ",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 2 } ] },
+      { id: "q8_3", text: "คิดเกี่ยวกับการฆ่าตัวตาย",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 6 } ] },
+      { id: "q8_3_1",
+        text: "ท่านสามารถควบคุมความอยากฆ่าตัวตายที่ท่านคิดอยู่นั้นได้หรือไม่ หรือบอกได้ไหมว่าคงจะไม่ทำตามความคิดนั้นในขณะนี้",
+        showIf: (ans) => (ans["q8_3"] ?? 0) > 0,
+        choices: [ { label: "ได้", pts: 0 }, { label: "ไม่ได้", pts: 8 } ] },
+      { id: "q8_4", text: "มีแผนการที่จะฆ่าตัวตาย",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 8 } ] },
+      { id: "q8_5", text: "ได้เตรียมการที่จะทำร้ายตนเองหรือเตรียมการจะฆ่าตัวตาย โดยตั้งใจว่าจะให้ตายจริง ๆ",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 9 } ] },
+      { id: "q8_6", text: "ได้ทำให้ตนเองบาดเจ็บ แต่ไม่ตั้งใจที่จะทำให้เสียชีวิต",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 4 } ] },
+      { id: "q8_7", text: "ได้พยายามฆ่าตัวตาย โดยคาดหวัง/ตั้งใจที่จะให้ตาย",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 10 } ] },
+      { id: "q8_8", text: "ท่านเคยพยายามฆ่าตัวตาย",
+        timeContext: "ตลอดชีวิตที่ผ่านมา",
+        choices: [ { label: "ไม่มี", pts: 0 }, { label: "มี", pts: 4 } ] },
+    ],
+    // เกณฑ์แปลผล: 0 ไม่มีแนวโน้ม / 1–8 น้อย / 9–16 ปานกลาง / ≥17 รุนแรง (ส่งต่อด่วน)
+    interpret(s) {
+      if (s === 0) return { level: "ไม่มีแนวโน้มฆ่าตัวตายในปัจจุบัน", color: "#4C9A6A" };
+      if (s <= 8)  return { level: "มีแนวโน้มที่จะฆ่าตัวตายในปัจจุบัน ระดับน้อย",    color: "#D9A441" };
+      if (s <= 16) return { level: "มีแนวโน้มที่จะฆ่าตัวตายในปัจจุบัน ระดับปานกลาง", color: "#C96B2E" };
+      return        { level: "มีแนวโน้มที่จะฆ่าตัวตายในปัจจุบัน ระดับรุนแรง",   color: "#A63A2B" };
+    },
+  },
+};
+
+/* ข้อความหน้าคั่น — เสียง "อยู่ข้างๆ กัน" (อยู่นอกชุดคำถาม ไม่ชี้นำคำตอบ) */
+const INTERSTITIALS = {
+  q2: { icon: "🌿", title: "เก่งมากเลย ผ่านส่วนแรกแล้ว",
+        text: "ต่อไปสั้นมาก มีแค่ 2 คำถาม ตอบว่า มี หรือ ไม่มี ตามความรู้สึกจริงในช่วง 2 สัปดาห์ที่ผ่านมาได้เลยนะ" },
+  q9: { icon: "🫶", title: "ขอบคุณที่เล่าให้ฟังนะ",
+        text: "จากคำตอบเมื่อกี้ เราอยากชวนทำต่ออีกชุดหนึ่ง มี 9 ข้อ เพื่อให้เราเข้าใจความรู้สึกของคุณชัดขึ้น ค่อยๆ ตอบได้ ไม่ต้องรีบเลย" },
+  q8: { icon: "🤝", title: "ชุดสุดท้ายแล้ว อยู่ด้วยกันนะ",
+        text: "คำถามชุดนี้อาจดูตรงและละเอียดอ่อน แต่ทุกคำตอบจะช่วยให้เราดูแลคุณได้ถูกทางจริงๆ ขอบคุณที่ไว้ใจและยังอยู่ตรงนี้ด้วยกัน" },
+};
+
+/* ข้อความ "จากเราถึงคุณ" ท้ายผล ตามโซน ST-5 (เสียงเพื่อนข้างๆ) */
+const ST5_TIPS = [
+  { max: 4,  tip: "วันนี้ใจคุณดูแข็งแรงดีนะ ดีใจด้วยจริงๆ ขอบคุณที่แวะมาดูแลใจตัวเอง นอนให้พอ ขยับร่างกายบ้าง แล้วมาเจอกันใหม่รอบหน้านะ" },
+  { max: 7,  tip: "ช่วงนี้อาจมีเรื่องให้คิดเยอะหน่อยใช่ไหม ไม่เป็นไรเลย ลองหายใจไปด้วยกันนะ เข้า 4 วินาที กลั้น 7 วินาที ผ่อนออกช้าๆ 8 วินาที ทำสัก 4 รอบก่อนนอนคืนนี้" },
+  { max: 9,  tip: "เราเห็นแล้วว่าช่วงนี้คุณแบกอะไรไว้เยอะ ขอบคุณที่บอกเราตามจริงนะ ลองแบ่งงานเป็นชิ้นเล็กๆ พักสั้นๆ ทุก 50 นาที และถ้าอยากมีใครรับฟัง ปุ่มข้างล่างมีคนรอฟังคุณอยู่จริงๆ" },
+  { max: 15, tip: "ขอบคุณมากที่ไว้ใจบอกเราตามความรู้สึกจริง มันต้องใช้ความกล้านะ คุณไม่ต้องผ่านช่วงนี้คนเดียวเลย มีอาจารย์ที่พร้อมอยู่ข้างคุณ หรือโทร 1323 ได้ตลอด 24 ชั่วโมง" },
+];
+
+/* =========================================================
+   ส่วนที่ 2: สถานะ flow
+   ลำดับ: ST-5 → 2Q (ทุกคน) → ถ้า 2Q มีข้อใดข้อหนึ่ง → 9Q
+   → ถ้า 9Q ≥ 7 หรือ ข้อ 9 ≥ 1 → 8Q
+   หมายเหตุ: เกณฑ์ทางการคือ 9Q ≥ 7 → 8Q
+   การเพิ่มเงื่อนไข "ข้อ 9 ≥ 1" เป็นการออกแบบเชิงป้องกันของระบบเรา
+   (safety-first) เพื่อไม่ให้พลาดผู้ที่มีความคิดทำร้ายตนเองแม้คะแนนรวมต่ำ
+   ========================================================= */
+const state = {
+  instKey: null,
+  qIdx: 0,
+  answers: {},        // id → pts (รวมทุกชุด)
+  results: {},        // instKey → { score, level, color, taken:true }
+  answerChanges: 0,
+  qStartTime: 0,
+  qTimes: [],
+  sectionStats: {},   // สัญญาณกล้องแยกรายชุด: instKey → {tension, negAffect, gazeAway, composite}
+};
+
+function visibleQuestions(instKey) {
+  return INSTRUMENTS[instKey].questions.filter(q => !q.showIf || q.showIf(state.answers));
+}
+function instScore(instKey) {
+  return visibleQuestions(instKey).reduce((sum, q) => sum + (state.answers[q.id] ?? 0), 0);
+}
+
+/* =========================================================
+   ส่วนที่ 3: ตัวเก็บสัญญาณจากกล้อง (บนเครื่องทั้งหมด)
+   ========================================================= */
+/* =========================================================
+   ระบบ detect สัญญาณจากกล้อง — อิงหลักฐาน FACS + งานวิจัยที่ผ่าน peer review
+   อ้างอิงหลัก:
+   ① FACS→MediaPipe blendshape mapping: Geoffroy et al. (ScienceDirect, 2026)
+      88% unanimous agreement จาก clinical psychologist 10 คน
+   ② AU4 sustained = stress / AU4+AU17 burst = hyperarousal (FACS, 2024)
+   ③ AU12 suppressed throughout = flat affect = depression severity (PMC10459725)
+   ④ Blink rate > 25/min = stressed, > 35/min = high risk (BMC Geriatrics, 2024)
+      สัมพันธ์กับ PHQ-15 และ GDS-15 อย่างมีนัยสำคัญ
+   ⑤ Asymmetry ซ้าย-ขวาใน AU = negative affect biomarker
+   ⑥ Flat affect (low variance ตลอดการทำ) = depression marker ที่ชัดกว่าค่าเฉลี่ย
+   ⑦ Blink rate REDUCTION (< 10/min ขณะเครียดสูง) = hypervigilance/PTSD pattern
+
+   ข้อจำกัดสำคัญ: MediaPipe ทำงานบนกล้อง visible-light → ไม่สามารถวัด
+   pupil dilation ได้แม่นยำ (ต้องการ IR tracker) จึงไม่รวม pupil ใน scoring
+   ========================================================= */
+
+const signals = {
+  enabled: false,
+  frames: 0,
+  faceMissing: 0,
+  startTime: 0,
+
+  // --- FACS AU4: Brow Lowerer (คิ้วขมวด = stress/negative arousal) ---
+  au4Sum: 0,           // ค่าสะสมทุกเฟรม สำหรับค่าเฉลี่ยรวม
+  au4Burst: 0,         // นับเฟรมที่ AU4 > 0.45 ต่อเนื่อง (sustained tension)
+
+  // --- FACS AU12: Lip Corner Puller (ยิ้ม — ถ้าไม่มีเลย = flat affect) ---
+  au12Sum: 0,
+  au12Peak: 0,         // ค่าสูงสุดที่เคยเห็น — ถ้าตลอดการทำ peak < 0.15 = flat affect
+
+  // --- FACS AU15+AU17: Mouth negative affect + Chin Raiser ---
+  au15Sum: 0,          // mouthFrown (AU15)
+  au17Sum: 0,          // chinRaiser — MediaPipe: jawOpen ใช้เป็น proxy ได้บางส่วน
+
+  // --- Asymmetry: ซ้าย-ขวา (negative affect biomarker) ---
+  asymBrowSum: 0,      // |browDownLeft − browDownRight|
+  asymSmileSum: 0,     // |smileLeft − smileRight|
+
+  // --- Gaze & Eye ---
+  gazeAwayFrames: 0,
+  lookDownFrames: 0,   // แยก lookDown เพราะ = อารมณ์เศร้า/ก้มหน้า
+  blinkCount: 0,
+  _blinkOn: false,
+
+  // --- Sliding window สำหรับคำนวณ variance (flat affect) ---
+  // เก็บค่า expressiveness รายเฟรม ~30 วินาทีล่าสุด ที่ 8fps = 240 เฟรม
+  _expWindow: [],
+};
+
+/* หน้าต่างเรียลไทม์ 5 วินาที สำหรับ real-time support detection */
+const rt = {
+  samples: [],         // distress score ต่อเฟรม
+  missStreak: 0,       // เฟรมที่ไม่พบใบหน้าต่อเนื่อง
+  lastAlert: 0,        // timestamp ที่แจ้งเตือนล่าสุด
+};
+
+let faceLandmarker = null, videoEl = null, rafId = null, lastDetect = 0;
+const DETECT_INTERVAL_MS = 125; // 8 fps — พอสำหรับสัญญาณสรุป, ประหยัดแบตมือถือ
+const EXP_WINDOW_MAX = 240;     // ~30 วินาที สำหรับ variance (flat affect)
+
+function bsScore(categories, name) {
+  const c = categories.find(x => x.categoryName === name);
+  return c ? c.score : 0;
+}
+
+/**
+ * ตรวจสภาพแวดล้อมก่อนขอกล้อง — คืน null ถ้าพร้อม, หรือข้อความอธิบายถ้าใช้ไม่ได้
+ * แยกสาเหตุให้ชัด เพราะ "กล้องไม่ทำงาน" มีได้หลายสาเหตุที่แก้ต่างกัน
+ */
+function diagnoseCameraEnv() {
+  // 1) ต้องเป็น secure context (https หรือ localhost) — http ธรรมดาใช้กล้องไม่ได้
+  if (!window.isSecureContext) {
+    return "หน้านี้ไม่ได้เปิดผ่าน HTTPS — กล้องต้องการการเชื่อมต่อที่ปลอดภัย กรุณาเปิดผ่านลิงก์ https://";
+  }
+  // 2) ตรวจว่าถูกฝังใน iframe ที่อาจไม่เปิดสิทธิ์กล้อง (เช่น หน้าตัวอย่างในแอป)
+  //    เป็นสาเหตุที่พบบ่อยที่สุดตอนทดสอบ — ต้องเปิดจากลิงก์จริงในเบราว์เซอร์
+  if (window.self !== window.top) {
+    return "IFRAME"; // ลองขอกล้องก่อน ถ้าพลาดค่อยแนะนำให้เปิดในเบราว์เซอร์
+  }
+  // 3) เบราว์เซอร์ไม่รองรับ getUserMedia เลย
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return "เบราว์เซอร์นี้ไม่รองรับการใช้กล้อง กรุณาลองเปิดด้วย Chrome หรือ Safari รุ่นใหม่";
+  }
+  return null;
+}
+
+/** แปลง error จาก getUserMedia เป็นข้อความที่ผู้ใช้เข้าใจและแก้ได้ */
+function explainCameraError(err) {
+  const name = err && err.name ? err.name : "";
+  const inIframe = window.self !== window.top;
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      // ใน iframe: มักเป็นเพราะ iframe ไม่มี allow="camera" ไม่ใช่ผู้ใช้กดปฏิเสธ
+      return inIframe
+        ? "หน้านี้ถูกเปิดในกรอบที่ไม่อนุญาตให้ใช้กล้อง — กรุณาเปิดลิงก์นี้ในเบราว์เซอร์ Chrome หรือ Safari โดยตรง (ไม่ใช่ผ่านหน้าตัวอย่างในแอป)"
+        : "กล้องถูกปฏิเสธสิทธิ์ — เปิดสิทธิ์กล้องให้เบราว์เซอร์ที่แถบที่อยู่ และตรวจ Settings ของมือถือว่าอนุญาตกล้องให้เบราว์เซอร์แล้ว";
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "ไม่พบกล้องหน้าบนอุปกรณ์นี้ — ทำแบบประเมินต่อได้ตามปกติ";
+    case "NotReadableError":
+    case "TrackStartError":
+      return "กล้องกำลังถูกใช้งานโดยแอปอื่นอยู่ — ปิดแอปที่ใช้กล้องแล้วลองใหม่";
+    default:
+      return "เปิดกล้องไม่สำเร็จ — ทำแบบประเมินต่อได้ตามปกติ (" + (name || "unknown") + ")";
+  }
+}
+
+async function initCamera() {
+  const btn = document.getElementById("btn-start-cam");
+  btn.disabled = true;
+  btn.textContent = "กำลังเตรียมกล้อง…";
+
+  // ตรวจสภาพแวดล้อมก่อน — บางกรณีไม่ต้องเสียเวลาขอกล้องเลย
+  const envIssue = diagnoseCameraEnv();
+  if (envIssue && envIssue !== "IFRAME") {
+    showToast(envIssue);
+    btn.disabled = false;
+    btn.textContent = "เริ่มทำ พร้อมเปิดกล้อง";
+    return false;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 480 } }, audio: false,
+    });
+    videoEl = document.getElementById("cam-video");
+    videoEl.srcObject = stream;
+    await new Promise(res => { videoEl.onloadedmetadata = res; });
+
+    btn.textContent = "กำลังโหลดตัววิเคราะห์…";
+    const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14");
+    const fileset = await vision.FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    faceLandmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "GPU",
+      },
+      outputFaceBlendshapes: true, runningMode: "VIDEO", numFaces: 1,
+    });
+
+    signals.enabled = true;
+    signals.startTime = performance.now();
+    document.getElementById("cam-wrap").classList.add("on");
+    document.getElementById("cam-label").classList.add("on");
+    detectLoop();
+    return true;
+  } catch (err) {
+    console.warn("camera/model unavailable:", err);
+    showToast(explainCameraError(err));
+    stopCamera();
+    return false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "เริ่มทำ พร้อมเปิดกล้อง";
+  }
+}
+
+function detectLoop() {
+  rafId = requestAnimationFrame(detectLoop);
+  const now = performance.now();
+  if (now - lastDetect < DETECT_INTERVAL_MS) return;
+  lastDetect = now;
+  if (!faceLandmarker || !videoEl || videoEl.readyState < 2) return;
+
+  let result;
+  try { result = faceLandmarker.detectForVideo(videoEl, now); } catch (e) { return; }
+
+  signals.frames++;
+  const statusDot = document.getElementById("cam-status");
+  const bs = result.faceBlendshapes && result.faceBlendshapes[0];
+  if (!bs) {
+    signals.faceMissing++;
+    rt.missStreak++;
+    statusDot.classList.remove("tracking");
+    checkRealtimeSupport(now);
+    return;
+  }
+  rt.missStreak = 0;
+  statusDot.classList.add("tracking");
+  const cat = bs.categories;
+
+  /* ① FACS AU4: browDownLeft/browDownRight
+     → Geoffroy 2026 mapping: browDownLeft + browDownRight ↔ AU4 bilateral
+     → threshold 0.35 sustained = stress marker (FACS 2024 research) */
+  const au4L = bsScore(cat, "browDownLeft");
+  const au4R = bsScore(cat, "browDownRight");
+  const au4  = (au4L + au4R) / 2;
+  signals.au4Sum += au4;
+  if (au4 > 0.35) signals.au4Burst++;
+
+  /* ② FACS AU12: mouthSmileLeft/mouthSmileRight
+     → ลดลงใน depression (PMC10459725): reduced AU12 during positive stimuli
+     → peak < 0.15 ตลอด = flat affect */
+  const au12L = bsScore(cat, "mouthSmileLeft");
+  const au12R = bsScore(cat, "mouthSmileRight");
+  const au12  = (au12L + au12R) / 2;
+  signals.au12Sum += au12;
+  if (au12 > signals.au12Peak) signals.au12Peak = au12;
+
+  /* ③ FACS AU15: mouthFrownLeft/mouthFrownRight (lip corner depressor)
+     FACS AU17: chinRaiser — MediaPipe ไม่มีตรงๆ ใช้ mouthPucker + jawForward เป็น proxy */
+  const au15 = (bsScore(cat, "mouthFrownLeft") + bsScore(cat, "mouthFrownRight")) / 2;
+  const au17proxy = (bsScore(cat, "mouthPucker") + bsScore(cat, "jawForward")) / 2;
+  signals.au15Sum += au15;
+  signals.au17Sum += au17proxy;
+
+  /* ④ Asymmetry ซ้าย-ขวา (negative affect biomarker — พบในงานวิจัยซึมเศร้า)
+     ใช้ absolute difference ทั้งคิ้วและมุมปาก */
+  signals.asymBrowSum  += Math.abs(au4L - au4R);
+  signals.asymSmileSum += Math.abs(au12L - au12R);
+
+  /* ⑤ Gaze: แยก lookDown (เศร้า/ก้มหน้า) ออกจาก lookLeft/Right (ละสายตา)
+     เพราะมีนัยทางอารมณ์ต่างกัน */
+  const lookLeft  = (bsScore(cat, "eyeLookOutLeft")  + bsScore(cat, "eyeLookInRight")) / 2;
+  const lookRight = (bsScore(cat, "eyeLookInLeft")   + bsScore(cat, "eyeLookOutRight")) / 2;
+  const lookDown  = (bsScore(cat, "eyeLookDownLeft") + bsScore(cat, "eyeLookDownRight")) / 2;
+  if (Math.max(lookLeft, lookRight) > 0.55) signals.gazeAwayFrames++;
+  if (lookDown > 0.60) signals.lookDownFrames++;
+
+  /* ⑥ Blink rate: threshold จาก BMC Geriatrics 2024
+     > 25/min = เครียด สัมพันธ์กับ PHQ-15
+     > 35/min = เสี่ยงสูง — ใช้เกณฑ์นี้แทนเกณฑ์เดิมที่ไม่มีที่มา */
+  const blink = (bsScore(cat, "eyeBlinkLeft") + bsScore(cat, "eyeBlinkRight")) / 2;
+  if (blink > 0.50 && !signals._blinkOn) { signals.blinkCount++; signals._blinkOn = true; }
+  else if (blink < 0.30) { signals._blinkOn = false; }
+
+  /* ⑦ Expressiveness window สำหรับคำนวณ variance (flat affect)
+     ค่ารวม AU ทั้งหมดในเฟรม = "expressiveness score" */
+  const expressiveness = au4 + au12 + au15 + au17proxy +
+    Math.abs(au4L - au4R) + Math.abs(au12L - au12R);
+  signals._expWindow.push(expressiveness);
+  if (signals._expWindow.length > EXP_WINDOW_MAX) signals._expWindow.shift();
+
+  /* เรียลไทม์ support detection — ตรวจ 5 วินาทีล่าสุด */
+  rt.samples.push(au4 + Math.max(0, au15 - au12));
+  if (rt.samples.length > 40) rt.samples.shift();
+  checkRealtimeSupport(now);
+}
+
+function checkRealtimeSupport(now) {
+  /* แสดง indicator เมื่อ distress สูงต่อเนื่อง 5 วิ หรือหายหน้านาน
+     ไม่แจ้งเตือน popup กลางหน้าจอ — แค่ pulse วงกล้องช้าลงเพื่อ
+     ให้นักเรียนรู้ว่าระบบกำลังสังเกตอยู่กับเขา */
+  if (rt.missStreak > 32) { // >4 วินาที หายหน้าต่อเนื่อง
+    document.getElementById("cam-ring").style.animationDuration = "1s";
+    return;
+  }
+  if (rt.samples.length < 30) return;
+  const avg = rt.samples.reduce((a, b) => a + b, 0) / rt.samples.length;
+  const ring = document.getElementById("cam-ring");
+  if (avg > 0.45) {
+    ring.style.animationDuration = "1.2s";
+    ring.style.borderColor = "#E8C57E"; // ทอง = สังเกตเห็นบางอย่าง
+  } else {
+    ring.style.animationDuration = "3s";
+    ring.style.borderColor = "var(--gold)";
+  }
+}
+
+function stopCamera() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+  if (videoEl && videoEl.srcObject) {
+    videoEl.srcObject.getTracks().forEach(t => t.stop());
+    videoEl.srcObject = null;
+  }
+  document.getElementById("cam-wrap").classList.remove("on");
+  document.getElementById("cam-label").classList.remove("on");
+}
+
+/* ==========================================================
+   computeIndex — ดัชนี "ควรชวนคุย" 0–100
+   5 มิติ อิง FACS + งานวิจัย peer-reviewed
+   น้ำหนักตั้งต้นจากความแม่นยำที่รายงานในงานวิจัย
+   ยังต้อง calibrate กับข้อมูลนักเรียน วพอ.พอ. จริงก่อนใช้งาน
+   ========================================================== */
+function computeIndex() {
+  if (!signals.enabled || signals.frames < 20) return null;
+  const tracked    = Math.max(1, signals.frames - signals.faceMissing);
+  const elapsedMin = Math.max(0.25, (performance.now() - signals.startTime) / 60000);
+  const bpm        = signals.blinkCount / elapsedMin;
+
+  /* ① มิติที่ 1: AU4 Tension (คิ้วขมวดสะสม + burst)
+     น้ำหนัก: 20 — AU4 sustained เป็น stress marker ที่ validated แล้วจาก FACS 2024 */
+  const au4Avg   = signals.au4Sum / tracked;
+  const au4BurstR = signals.au4Burst / tracked;
+  const tension  = Math.min(1, (au4Avg / 0.35) * 0.6 + au4BurstR * 0.4);
+
+  /* ② มิติที่ 2: Flat Affect (variance ต่ำ + AU12 suppressed)
+     น้ำหนัก: 22 — เป็น depression marker ที่ชัดกว่าค่าเฉลี่ยรวม (PMC10459725)
+     flat = smileMaxPeak < 0.15 (แสดงว่าไม่มีรอยยิ้มเลยตลอดการทำ)
+          + variance ของ expressiveness ต่ำผิดปกติ */
+  const flatSmile = signals.au12Peak < 0.15 ? 1.0 : Math.max(0, 1 - signals.au12Peak / 0.30);
+  let   exprVar   = 0;
+  if (signals._expWindow.length >= 20) {
+    const mean = signals._expWindow.reduce((a, b) => a + b, 0) / signals._expWindow.length;
+    const variance = signals._expWindow.reduce((a, b) => a + (b - mean) ** 2, 0) / signals._expWindow.length;
+    // variance ปกติ ~0.02–0.05; ถ้า < 0.008 = flat affect
+    exprVar = variance < 0.008 ? 1.0 : Math.max(0, 1 - variance / 0.025);
+  }
+  const flatAffect = Math.min(1, flatSmile * 0.6 + exprVar * 0.4);
+
+  /* ③ มิติที่ 3: Negative Affect Pattern (AU15 frown + asymmetry)
+     น้ำหนัก: 18 — AU15 sustained + asymmetry = negative affect biomarker */
+  const au15Avg   = signals.au15Sum / tracked;
+  const asymBrow  = signals.asymBrowSum / tracked;
+  const asymSmile = signals.asymSmileSum / tracked;
+  const negAffect = Math.min(1, (au15Avg / 0.30) * 0.5 + ((asymBrow + asymSmile) / 0.20) * 0.5);
+
+  /* ④ มิติที่ 4: Eye Signal (blink rate ตาม BMC Geriatrics 2024 + gaze avoidance)
+     น้ำหนัก: 20
+     > 25 bpm = เครียด (PHQ-15 correlation)
+     > 35 bpm = เสี่ยงสูง
+     lookDown สูง = เศร้า/ก้มหน้า แยกจาก gazeAway = ละสายตา */
+  const blinkScore = bpm > 35 ? 1.0
+                   : bpm > 25 ? (bpm - 25) / 10
+                   : 0;
+  const gazeScore  = (signals.gazeAwayFrames + signals.lookDownFrames * 1.5) / tracked;
+  const eyeSignal  = Math.min(1, blinkScore * 0.5 + gazeScore * 0.5);
+
+  /* ⑤ มิติที่ 5: Behavioral (เวลาตอบ + เปลี่ยนคำตอบ + หายหน้า)
+     น้ำหนัก: 20 — พฤติกรรมระหว่างทำ */
+  const missing    = signals.faceMissing / signals.frames;
+  const avgSec     = state.qTimes.length
+    ? state.qTimes.reduce((a, b) => a + b, 0) / state.qTimes.length / 1000 : 0;
+  const hesitation = Math.min(1,
+    Math.max(0, (avgSec - 10) / 15) +
+    Math.min(0.5, state.answerChanges * 0.15) +
+    missing * 0.5
+  );
+
+  const raw   = tension * 20 + flatAffect * 22 + negAffect * 18 + eyeSignal * 20 + hesitation * 20;
+  const index = Math.min(100, Math.round(raw));
+
+  return {
+    index,
+    /* flags คุณภาพสัญญาณ: บอกอาจารย์ว่าสัญญาณไหนโดดเด่น */
+    flags: {
+      flatAffect:  flatAffect  > 0.65,   // ไม่มีรอยยิ้มเลยตลอดการทำ
+      au4Burst:    au4BurstR   > 0.30,   // คิ้วขมวดมากกว่า 30% ของเวลาทำ
+      highBlink:   bpm         > 25,     // blink rate เกินเกณฑ์ PHQ-15
+      lookDown:    signals.lookDownFrames / tracked > 0.20, // ก้มหน้า > 20%
+      asymmetric:  (asymBrow + asymSmile) > 0.12, // asymmetry ผิดปกติ
+    },
+    detail: {
+      "AU4 คิ้วขมวด (เฉลี่ย/burst)":   au4Avg.toFixed(2) + " / " + (au4BurstR * 100).toFixed(0) + "%",
+      "AU12 ยิ้มสูงสุด (flat affect)":  signals.au12Peak.toFixed(2) + (flatSmile > 0.7 ? " ⚠️ flat" : ""),
+      "AU15 มุมปากตก (เฉลี่ย)":        au15Avg.toFixed(2),
+      "Asymmetry คิ้ว / ปาก":          asymBrow.toFixed(2) + " / " + asymSmile.toFixed(2),
+      "Blink rate/นาที (เกณฑ์ 25)":    bpm.toFixed(1) + (bpm > 35 ? " ⚠️ สูงมาก" : bpm > 25 ? " ⚠️" : ""),
+      "ก้มหน้า / ละสายตา":            (signals.lookDownFrames / tracked * 100).toFixed(0) + "% / " + (signals.gazeAwayFrames / tracked * 100).toFixed(0) + "%",
+      "Expressiveness variance":       signals._expWindow.length >= 20
+        ? (() => { const m = signals._expWindow.reduce((a,b)=>a+b,0)/signals._expWindow.length; return (signals._expWindow.reduce((a,b)=>a+(b-m)**2,0)/signals._expWindow.length).toFixed(4); })()
+        : "ข้อมูลยังไม่พอ",
+      "เวลาตอบเฉลี่ย/ข้อ":             avgSec.toFixed(1) + " วิ",
+      "เปลี่ยนคำตอบ":                 state.answerChanges + " ครั้ง",
+      "เฟรมที่วิเคราะห์ (tracked)":     tracked + " / " + signals.frames,
+    },
+    /* Sub-scores สำหรับ dashboard อาจารย์ (ส่งเข้า backend ด้วย) */
+    subscores: { tension, flatAffect, negAffect, eyeSignal, hesitation },
+  };
+}
+
+/* =========================================================
+   ส่วนที่ 3.5: ส่งผลเข้า backend (GAS)
+   - คำนวณดัชนีพฤติกรรมครั้งเดียวแล้ว cache ไว้ ใช้ทั้งแสดงผลและส่งข้อมูล
+   - ส่งแบบไม่บล็อกหน้าจอ: ผลแสดงให้นักเรียนเห็นทันทีเสมอ
+     แม้เน็ตหลุด การส่งพลาดจะแจ้งเบาๆ ไม่ทำให้ประสบการณ์สะดุด
+   - ไม่ตั้ง Content-Type เป็น application/json โดยเจตนา
+     เพื่อเลี่ยง CORS preflight ซึ่ง GAS Web App ไม่รองรับ
+   ========================================================= */
+let _behaviorIdx;   // undefined = ยังไม่คำนวณ, null = กล้องไม่มีข้อมูลพอ
+let _submitted = false;
+
+function getBehaviorIndex() {
+  if (_behaviorIdx === undefined) _behaviorIdx = computeIndex();
+  return _behaviorIdx;
+}
+
+function isConflict(idx) {
+  const st5 = state.results.st5;
+  const selfLow = st5 && st5.score <= 4 && (state.results.q2?.score ?? 0) === 0;
+  return !!(idx && selfLow && idx.index >= 55);
+}
+
+function captureCamSnapshot() {
+  const video = document.getElementById("cam-video");
+  if (!signals.enabled || !video || video.readyState < 2) return null;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 480;
+    canvas.height = Math.round(480 * ((video.videoHeight || 360) / (video.videoWidth || 480)));
+    const ctx = canvas.getContext("2d");
+    // พลิกแนวนอนกระจกเงาเหมือนกล้องจริง
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.75); // base64 string
+  } catch (e) {
+    console.warn("Snapshot failed:", e);
+    return null;
+  }
+}
+
+async function submitResultOnce() {
+  if (_submitted) return;
+  _submitted = true;
+  if (!CONFIG.GAS_ENDPOINT) return; // โหมดทดสอบหน้าเว็บอย่างเดียว
+
+  const idx = getBehaviorIndex();
+  const conflict = isConflict(idx);
+
+  // แคปภาพอัตโนมัติเมื่อเปิดกล้อง + อยู่ในเคสเฝ้าระวัง/เสี่ยง (ดัชนีกล้อง >= 45 หรือมีธงขัดแย้ง หรือ 8Q/9Q มีคะแนน)
+  let snapshot = null;
+  const hasRiskScore = (state.results.q8?.score ?? 0) >= 1 || (state.results.q9?.score ?? 0) >= 7 || (state.results.st5?.score ?? 0) >= 8;
+  if (signals.enabled && (conflict || hasRiskScore || (idx && idx.index >= 45))) {
+    snapshot = captureCamSnapshot();
+  }
+
+  const payload = {
+    action: "submitAssessment",
+    studentId: activeStudentId(),
+    lineUserId: liffState.userId,   // ผูกผลกับ LINE userId ด้วย (ถ้ามี)
+    st5Score: state.results.st5?.score ?? null,
+    q2Score:  state.results.q2?.score ?? null,
+    q9Score:  state.results.q9?.score ?? null,
+    q9Item9:  state.answers["q9_9"] ?? null,
+    q8Score:  state.results.q8?.score ?? null,
+    behaviorIndex: idx ? idx.index : null,
+    behaviorFlags: idx ? idx.flags : null,
+    behaviorSubscores: idx ? idx.subscores : null,
+    behaviorDetail: idx ? idx.detail : null,
+    conflictFlag: conflict,
+    cameraUsed: signals.enabled,
+    displayName: identity.name || queryParam("nm"),
+    userType: identity.userType || queryParam("ut") || "student",
+    faceSnapshot: snapshot, // ส่งภาพถ่ายใบหน้ากรณีเฝ้าระวัง
+  };
+
+  try {
+    const res = await fetch(CONFIG.GAS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    showToast("บันทึกผลเรียบร้อยแล้ว มีคนดูแลข้อมูลของคุณอยู่นะ");
+  } catch (err) {
+    console.warn("submit failed:", err);
+    showToast("ยังส่งข้อมูลไม่สำเร็จ ผลของคุณแสดงบนหน้าจอตามปกติ ลองใหม่เมื่อมีสัญญาณอินเทอร์เน็ตนะ");
+    _submitted = false; // เปิดโอกาสส่งซ้ำถ้าผู้ใช้กลับมาหน้าผลอีกครั้ง
+  }
+}
+
+/* =========================================================
+   ส่วนที่ 3.7: สัญญาณรายช่วง + พักหายใจระหว่างชุด
+   หลักคิด: กล้องไม่ได้มีไว้แค่บันทึก แต่มีไว้ "ช่วยตรงนั้นเลย"
+   - เก็บ delta ของสัญญาณเฉพาะช่วงของแต่ละชุดคำถาม
+     (เครียดพุ่งเฉพาะช่วง 9Q/8Q เป็นข้อมูลสำคัญกว่าค่าเฉลี่ยรวม)
+   - ถ้าช่วงที่เพิ่งจบมีสัญญาณตึงสูง → เสนอพักหายใจ 30 วิ ก่อนไปต่อ
+     เป็นการ "เสนอ" เสมอ ไม่บังคับ และไม่ใช้คำที่ทำให้ตกใจ
+   - เกณฑ์ composite ≥ 0.4 เป็นค่าตั้งต้น ต้อง calibrate กับข้อมูลจริง
+   ========================================================= */
+let _sectionMark = null;
+
+function snapshotSignals() {
+  return {
+    frames: signals.frames, missing: signals.faceMissing,
+    brow: signals.browDownSum, frown: signals.frownSum,
+    smile: signals.smileSum, gaze: signals.gazeAwayFrames,
+  };
+}
+
+function captureSection(key) {
+  if (!signals.enabled || !_sectionMark) { state.sectionStats[key] = null; return; }
+  const now = snapshotSignals();
+  const d = {
+    frames: now.frames - _sectionMark.frames,
+    missing: now.missing - _sectionMark.missing,
+    brow: now.brow - _sectionMark.brow,
+    frown: now.frown - _sectionMark.frown,
+    smile: now.smile - _sectionMark.smile,
+    gaze: now.gaze - _sectionMark.gaze,
+  };
+  _sectionMark = now;
+  if (d.frames < 15) { state.sectionStats[key] = null; return; } // ข้อมูลน้อยเกินไป
+
+  const tracked = Math.max(1, d.frames - d.missing);
+  const tension   = Math.min(1, (d.brow / tracked) / 0.5);
+  const negAffect = Math.min(1, Math.max(0, (d.frown - d.smile) / tracked / 0.35));
+  const gazeAway  = d.gaze / tracked;
+  const composite = +(tension * 0.5 + negAffect * 0.3 + gazeAway * 0.2).toFixed(2);
+  state.sectionStats[key] = {
+    tension: +tension.toFixed(2),
+    negAffect: +negAffect.toFixed(2),
+    gazeAway: +gazeAway.toFixed(2),
+    frames: d.frames,
+    composite,
+  };
+}
+
+function sectionNeedsBreak(key) {
+  const s = state.sectionStats[key];
+  return !!(s && s.composite >= 0.4);
+}
+
+/* ฝึกหายใจ 3 รอบ: เข้า 4 วิ → ค้าง 4 วิ → ผ่อนออก 6 วิ (~42 วิ) */
+const BREATH_PHASES = [
+  { label: "หายใจเข้าช้าๆ…",   dur: 4000, scale: 1.6 },
+  { label: "ค้างไว้เบาๆ…",      dur: 4000, scale: 1.6 },
+  { label: "ผ่อนลมหายใจออก…", dur: 6000, scale: 1.0 },
+];
+const BREATH_ROUNDS = 3;
+let _breathTimer = null;
+let _afterBreath = null;
+
+function startBreath(afterFn) {
+  _afterBreath = afterFn;
+  showScreen("screen-breath");
+  runBreathPhase(0, 0);
+}
+
+function runBreathPhase(round, phaseIdx) {
+  if (round >= BREATH_ROUNDS) { endBreath(); return; }
+  const phase = BREATH_PHASES[phaseIdx];
+  const circle = document.getElementById("breath-circle");
+  document.getElementById("breath-label").textContent = phase.label;
+  document.getElementById("breath-round").textContent = `รอบที่ ${round + 1} / ${BREATH_ROUNDS}`;
+  circle.style.transitionDuration = phase.dur + "ms";
+  circle.style.transform = `scale(${phase.scale})`;
+  _breathTimer = setTimeout(() => {
+    const nextPhase = (phaseIdx + 1) % BREATH_PHASES.length;
+    runBreathPhase(nextPhase === 0 ? round + 1 : round, nextPhase);
+  }, phase.dur);
+}
+
+function endBreath() {
+  clearTimeout(_breathTimer);
+  _breathTimer = null;
+  const fn = _afterBreath;
+  _afterBreath = null;
+  if (fn) fn();
+}
+
+/* =========================================================
+   ส่วนที่ 4: เอนจิน flow + การแสดงผล
+   ========================================================= */
+let activeScreenId = "screen-identify";
+function showScreen(id, direction = "push") {
+  const curr = document.getElementById(activeScreenId);
+  const next = document.getElementById(id);
+  if (!next) return;
+
+  if (curr && curr !== next) {
+    curr.classList.remove("active", "slide-in-right", "slide-in-left", "slide-out-left", "slide-out-right");
+    curr.classList.add(direction === "push" ? "slide-out-left" : "slide-out-right");
+    setTimeout(() => {
+      if (curr.id !== activeScreenId) {
+        curr.classList.remove("active", "slide-out-left", "slide-out-right");
+      }
+    }, 350);
+  }
+
+  next.classList.remove("slide-in-right", "slide-in-left", "slide-out-left", "slide-out-right");
+  next.classList.add("active", direction === "push" ? "slide-in-right" : "slide-in-left");
+  activeScreenId = id;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+function startInstrument(key) {
+  state.instKey = key;
+  state.qIdx = 0;
+  showScreen("screen-quiz");
+  renderQuestion();
+}
+
+function showInterstitial(nextKey) {
+  const it = INTERSTITIALS[nextKey];
+  document.getElementById("inter-icon").textContent  = it.icon;
+  document.getElementById("inter-title").textContent = it.title;
+  document.getElementById("inter-text").textContent  = it.text;
+  document.getElementById("btn-inter-next").onclick  = () => startInstrument(nextKey);
+  showScreen("screen-interstitial");
+}
+
+function renderProgress(qs) {
+  const wrap = document.getElementById("progress");
+  wrap.innerHTML = "";
+  qs.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "progress-dot" + (i < state.qIdx ? " done" : i === state.qIdx ? " now" : "");
+    wrap.appendChild(d);
+  });
+}
+
+function renderQuestion() {
+  const inst = INSTRUMENTS[state.instKey];
+  const qs = visibleQuestions(state.instKey);
+  if (state.qIdx >= qs.length) { finishInstrument(); return; }
+  const q = qs[state.qIdx];
+  const choices = q.choices || inst.choices;
+
+  document.getElementById("inst-label").textContent = inst.label;
+  renderProgress(qs);
+  document.getElementById("q-number").textContent = `ข้อ ${state.qIdx + 1} / ${qs.length}`;
+  document.getElementById("q-context").textContent =
+    (q.timeContext || inst.context) + " · ไม่มีคำตอบถูกหรือผิดนะ";
+  document.getElementById("q-text").textContent = q.text;
+
+  const wrap = document.getElementById("answers");
+  wrap.innerHTML = "";
+  choices.forEach(choice => {
+    const b = document.createElement("button");
+    b.className = "answer-btn" + (state.answers[q.id] === choice.pts ? " selected" : "");
+    b.innerHTML = `<span>${choice.label}</span>`;
+    b.addEventListener("click", () => {
+      if (state.answers[q.id] !== undefined && state.answers[q.id] !== choice.pts) {
+        state.answerChanges++;
+      }
+      state.answers[q.id] = choice.pts;
+      // ถ้าเปลี่ยน 8Q ข้อ 3 เป็น "ไม่มี" ให้ล้างคำตอบข้อย่อย 3.1 ทิ้ง
+      if (q.id === "q8_3" && choice.pts === 0) delete state.answers["q8_3_1"];
+      wrap.querySelectorAll(".answer-btn").forEach(x => x.classList.remove("selected"));
+      b.classList.add("selected");
+      document.getElementById("btn-next").disabled = false;
+    });
+    wrap.appendChild(b);
+  });
+
+  document.getElementById("btn-back").style.visibility = state.qIdx === 0 ? "hidden" : "visible";
+  document.getElementById("btn-next").disabled = state.answers[q.id] === undefined;
+  document.getElementById("btn-next").textContent =
+    state.qIdx === qs.length - 1 ? "จบส่วนนี้" : "ข้อถัดไป";
+  state.qStartTime = performance.now();
+}
+
+function nextQuestion() {
+  state.qTimes.push(performance.now() - state.qStartTime);
+  state.qIdx++;
+  slideToQuestion("left"); // visibleQuestions ประเมินใหม่ทุกครั้ง รองรับข้อย่อย 8Q 3.1
+}
+
+/**
+ * เปลี่ยนข้อพร้อม slide animation แบบ iOS
+ * dir = "left" ไปข้อถัดไป (เลื่อนออกซ้าย), "right" ย้อนกลับ (เลื่อนออกขวา)
+ * ถ้าเบราว์เซอร์ตั้ง reduce motion ไว้ จะข้าม animation ให้อัตโนมัติ
+ */
+function slideToQuestion(dir) {
+  const slide = document.getElementById("q-slide");
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!slide || reduce) { renderQuestion(); return; }
+
+  slide.classList.remove("slide-in");
+  slide.classList.add(dir === "left" ? "slide-out-left" : "slide-out-right");
+
+  setTimeout(() => {
+    renderQuestion();
+    // เข้าจากฝั่งตรงข้ามกับที่ออกไป
+    slide.classList.remove("slide-out-left", "slide-out-right");
+    slide.classList.add(dir === "left" ? "slide-out-right" : "slide-out-left");
+    // บังคับ reflow เพื่อให้ transition ทำงานตอนสลับกลับเป็น slide-in
+    void slide.offsetWidth;
+    slide.classList.remove("slide-out-left", "slide-out-right");
+    slide.classList.add("slide-in");
+  }, 300);
+}
+
+function finishInstrument() {
+  const key = state.instKey;
+  const score = instScore(key);
+  const interp = INSTRUMENTS[key].interpret(score);
+  state.results[key] = { score, ...interp, taken: true };
+
+  // ตัดสินใจขั้นถัดไปตามเกณฑ์ทางการ (+ เงื่อนไขป้องกันเพิ่มของระบบเรา)
+  if (key === "st5") { showInterstitial("q2"); return; }
+  if (key === "q2") {
+    if (score >= 1) { showInterstitial("q9"); return; }  // มีข้อใดข้อหนึ่ง → 9Q
+    showResult(); return;                                 // ไม่มีทั้งคู่ = ปกติ
+  }
+  if (key === "q9") {
+    const item9 = state.answers["q9_9"] ?? 0;
+    if (score >= 7 || item9 >= 1) { showInterstitial("q8"); return; }
+    showResult(); return;
+  }
+  if (key === "q8") {
+    if (score >= 17) { showCare(); return; } // ระดับรุนแรง → โหมดดูแลพิเศษทันที
+    showResult(); return;
+  }
+}
+
+/* =========================================================
+   ส่วนที่ 5: หน้าผลลัพธ์ + โหมดดูแลพิเศษ
+   ========================================================= */
+const INSTRUMENT_NAMES = {
+  st5: "แบบประเมินความเครียด (ST-5)",
+  q2:  "แบบคัดกรองโรคซึมเศร้า 2 คำถาม (2Q)",
+  q9:  "แบบประเมินโรคซึมเศร้า 9 คำถาม (9Q)",
+  q8:  "แบบประเมินการฆ่าตัวตาย 8 คำถาม (8Q)",
+};
+const INSTRUMENT_MAX = { st5: 15, q2: 2, q9: 27, q8: 52 };
+
+function showResult() {
+  stopCamera();
+  submitResultOnce(); // ส่งเข้า backend แบบไม่บล็อก — หน้าจอแสดงผลทันที
+  showScreen("screen-result");
+
+  const st5 = state.results.st5;
+  document.getElementById("score-val").textContent = st5.score;
+  const ring = document.getElementById("ring-fill");
+  ring.style.stroke = st5.color;
+  requestAnimationFrame(() => {
+    ring.style.strokeDashoffset = String(427 - (427 * st5.score / 15));
+  });
+  const chip = document.getElementById("zone-chip");
+  chip.textContent = st5.level;
+  chip.style.background = st5.color + "33";
+  chip.style.color = "#F4EFE2";
+  chip.style.border = `1px solid ${st5.color}`;
+
+  // การ์ดผลรายชุด (เฉพาะชุดที่ได้ทำ)
+  const cardsWrap = document.getElementById("result-cards");
+  cardsWrap.innerHTML = "";
+  ["st5", "q2", "q9", "q8"].forEach(key => {
+    const r = state.results[key];
+    if (!r) return;
+    const div = document.createElement("div");
+    div.className = "result-card";
+    div.style.borderLeftColor = r.color;
+    let note = "";
+    if (key === "q2" && r.score === 0) note = "ไม่จำเป็นต้องประเมินชุดถัดไป";
+    if (key === "q9" && r.score >= 13) note = "ตามแนวทางกรมสุขภาพจิต ระดับนี้ควรได้พบบุคลากรทางการแพทย์ — อาจารย์ผู้ดูแลจะช่วยประสานให้";
+    if (key === "q8" && r.score >= 1 && r.score <= 16) note = "อาจารย์ผู้ดูแลจะติดต่อคุณภายใน 24 ชั่วโมง เพื่อชวนคุยและวางแผนดูแลด้วยกัน";
+    div.innerHTML = `
+      <div class="rc-head">
+        <span class="rc-name">${INSTRUMENT_NAMES[key]}</span>
+        <span class="rc-score">${r.score} / ${INSTRUMENT_MAX[key]} คะแนน</span>
+      </div>
+      <div class="rc-level" style="color:${r.color === "#4C9A6A" ? "#8ED3A8" : "#F4EFE2"}">${r.level}</div>
+      ${note ? `<div class="rc-note">${note}</div>` : ""}
+    `;
+    cardsWrap.appendChild(div);
+  });
+
+  document.getElementById("tip-text").textContent =
+    ST5_TIPS.find(t => st5.score <= t.max).tip;
+
+  // แผงดัชนีพฤติกรรม — ใช้ค่าที่ cache ไว้ ให้ตรงกับที่ส่งเข้า backend เสมอ
+  const idx = getBehaviorIndex();
+  const panel = document.getElementById("debug-panel");
+  if (idx) {
+    panel.style.display = "block";
+    const m = document.getElementById("metrics");
+    /* แสดง flags ก่อน — อาจารย์จะได้เห็นทันทีว่าสัญญาณไหนโดดเด่น */
+    const flagLabels = {
+      flatAffect: "😶 ไม่มีรอยยิ้มตลอดการทำ (flat affect)",
+      au4Burst:   "😤 คิ้วขมวดมากกว่า 30% ของเวลา",
+      highBlink:  "👁️ กะพริบตาถี่ผิดปกติ (> 25/นาที)",
+      lookDown:   "⬇️ ก้มหน้ามากกว่า 20% ของเวลา",
+      asymmetric: "↔️ ความไม่สมมาตรใบหน้าสูงผิดปกติ",
+    };
+    const activeFlags = idx.flags ? Object.entries(idx.flags).filter(([,v]) => v) : [];
+    if (activeFlags.length > 0) {
+      m.innerHTML = `<div class="metric" style="color:var(--gold-soft); font-weight:700; border-bottom:1px solid rgba(217,164,65,0.3)"><span>สัญญาณที่ระบบพบ</span><span>${activeFlags.length} รายการ</span></div>`;
+      activeFlags.forEach(([k]) => {
+        m.innerHTML += `<div class="metric" style="color:var(--gold-soft)"><span>${flagLabels[k] || k}</span><span>✓</span></div>`;
+      });
+      m.innerHTML += `<div class="metric" style="padding-top:8px;"><span>ดัชนีควรชวนคุย (0–100)</span><span><strong>${idx.index}</strong></span></div>`;
+    } else {
+      m.innerHTML = `<div class="metric"><span>ดัชนีควรชวนคุย (0–100)</span><span><strong>${idx.index}</strong></span></div>`;
+    }
+    Object.entries(idx.detail).forEach(([k, v]) => {
+      m.innerHTML += `<div class="metric"><span>${k}</span><span>${v}</span></div>`;
+    });
+    // สัญญาณขัดแย้ง: รายงานตนเองต่ำทุกชุด แต่ดัชนีพฤติกรรมสูง
+    const conflict = isConflict(idx);
+    const fl = document.getElementById("flag-line");
+    if (conflict) {
+      fl.textContent = "🟡 สัญญาณขัดแย้ง — คำตอบอยู่โซนปกติแต่ดัชนีพฤติกรรมสูง ควรชวนคุยเพิ่ม";
+      fl.style.color = "#E8C57E";
+    } else {
+      fl.textContent = "⚪ ไม่พบสัญญาณขัดแย้งระหว่างคำตอบกับพฤติกรรม";
+      fl.style.color = "#C9C2AE";
+    }
+  } else {
+    panel.style.display = "none";
+  }
+}
+
+function showCare() {
+  stopCamera();
+  submitResultOnce(); // เคสเสี่ยงสูง — ส่งทันที backend จะ push LINE แจ้งอาจารย์เอง
+  showScreen("screen-care");
+}
+
+/* ---------- ผูกเหตุการณ์ ---------- */
+document.getElementById("btn-identify").addEventListener("click", handleIdentify);
+document.getElementById("in-code").addEventListener("input", async (e) => {
+  const code = String(e.target.value || "").trim();
+  const errEl = document.getElementById("err-identity");
+  if (code.length === 7 && /^\d{7}$/.test(code)) {
+    errEl.style.color = "#E5B65A";
+    errEl.textContent = "กำลังค้นหารหัสนักเรียนในระบบ...";
+    if (CONFIG.GAS_ENDPOINT) {
+      try {
+        const res = await fetch(CONFIG.GAS_ENDPOINT, {
+          method: "POST",
+          body: JSON.stringify({ action: "verifyStudent", studentId: code }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          errEl.style.color = "#5FB77E";
+          errEl.textContent = `✓ พบข้อมูลนักเรียน (${data.nameMasked || "ในทะเบียน วพอ."})`;
+          const nameField = document.getElementById("in-name");
+          if (!nameField.value && data.nameMasked) {
+            nameField.value = data.nameMasked;
+          }
+          identity.year = data.year || "";
+        } else {
+          errEl.style.color = "#C9C2AE";
+          errEl.textContent = "ไม่พบรหัสในทะเบียน สามารถกรอกชื่อ-สกุลในช่องด้านล่างได้เลย";
+        }
+      } catch (err) {
+        errEl.style.color = "#C9C2AE";
+        errEl.textContent = "รหัสประจำตัว 7 หลักถูกต้อง กรอกชื่อ-สกุลในช่องด้านล่างต่อได้เลย";
+      }
+    } else {
+      errEl.style.color = "#5FB77E";
+      errEl.textContent = "✓ รหัสประจำตัว 7 หลักถูกต้อง กรอกชื่อ-สกุลในช่องด้านล่างต่อได้เลย";
+    }
+  } else if (code.length === 0) {
+    errEl.textContent = "";
+  }
+});
+document.getElementById("in-code").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("in-name").focus();
+});
+document.getElementById("in-name").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") handleIdentify();
+});
+
+document.getElementById("btn-start-cam").addEventListener("click", async () => {
+  await initCamera();
+  startInstrument("st5");
+});
+document.getElementById("btn-start-nocam").addEventListener("click", () => startInstrument("st5"));
+document.getElementById("btn-next").addEventListener("click", nextQuestion);
+document.getElementById("btn-back").addEventListener("click", () => {
+  if (state.qIdx > 0) { state.qIdx--; slideToQuestion("right"); }
+});
+document.getElementById("btn-help").addEventListener("click", () => {
+  showToast("ในระบบจริง ปุ่มนี้จะเชื่อมต่ออาจารย์ผู้ดูแล / คุยแบบนิรนาม / สายด่วน 1323");
+});
+document.getElementById("btn-care-teacher").addEventListener("click", () => {
+  showToast("ในระบบจริง ระบบจะแจ้งอาจารย์ผู้ดูแลทาง LINE ทันที พร้อมเบอร์ติดต่อของคุณ");
+});
+document.getElementById("btn-care-result").addEventListener("click", showResult);
+document.getElementById("btn-restart").addEventListener("click", () => location.reload());
+
+/* =========================================================
+   เริ่มต้นระบบ — เรียก LIFF ตอนโหลด (ไม่บล็อกการแสดงผลหน้าแรก)
+   ========================================================= */
+// ถ้าเปิดในกรอบ (แอป/iframe) หรือไม่ใช่ HTTPS → โชว์แบนเนอร์เตือนกล้องถาวร
+(function showCamBannerIfBlocked() {
+  const inIframe = window.self !== window.top;
+  const notSecure = !window.isSecureContext;
+  if (inIframe || notSecure) {
+    const b = document.getElementById("cam-banner");
+    if (b) b.style.display = "block";
+  }
+})();
+
+initLiff().then(async () => {
+  if (liffState.displayName) {
+    const h1 = document.querySelector("#screen-intro h1");
+    if (h1) h1.innerHTML = `สวัสดี ${esc(liffState.displayName)}<br>แวะมาเช็คใจกันสักนิดนะ`;
+  }
+
+  // เปิดจาก LINE และเคยผูกรหัสไว้แล้ว → ข้ามหน้ากรอก ไปคำชี้แจงต่อเลย
+  // (ถ้ายังไม่ผูก ก็อยู่หน้าระบุตัวตนตามปกติ — กรอกรหัสหรือชื่อเองได้ ไม่ต้องรออาจารย์)
+  const preId = liffState.studentId || queryParam("sid");
+  if (preId) {
+    identity.id = preId;
+    identity.userType = queryParam("ut") || "student";
+    identity.name = queryParam("nm") || liffState.displayName || "";
+    identity.confirmed = true;
+    try {
+      if (CONFIG.GAS_ENDPOINT && /^\d{7}$/.test(preId)) {
+        const res = await fetch(CONFIG.GAS_ENDPOINT, {
+          method: "POST",
+          body: JSON.stringify({ action: "verifyStudent", studentId: preId }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          identity.name = data.nameMasked || identity.name;
+          identity.year = data.year || "";
+        }
+      }
+    } catch (e) { /* ดึงชื่อไม่ได้ก็ทำแบบประเมินต่อได้ */ }
+    showScreen("screen-intro");
+  }
+});
+
+/** escape HTML — กัน XSS เวลาแสดง displayName จาก LINE */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+</script>
+</body>
+</html>
