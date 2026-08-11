@@ -409,6 +409,7 @@
   </div>
 
   <button class="btn btn-gold" id="btn-identify">ถัดไป</button>
+  <button class="btn btn-ghost" id="btn-quick-guest" style="margin-top:10px; border-color:rgba(229,184,90,0.4); color:var(--gold-soft);">⚡ เริ่มทำทันที (โหมดบุคคลทั่วไป)</button>
   <a class="admin-link" id="link-admin" href="mindcare-dashboard.html">สำหรับผู้ดูแล (ต้องมีรหัสเข้าใช้งาน)</a>
 </section>
 
@@ -1681,6 +1682,13 @@ function showCare() {
 
 /* ---------- ผูกเหตุการณ์ ---------- */
 document.getElementById("btn-identify").addEventListener("click", handleIdentify);
+document.getElementById("btn-quick-guest").addEventListener("click", () => {
+  const autoGuestId = "G-" + String(Date.now()).slice(-6);
+  identity.id = autoGuestId;
+  identity.name = "ผู้รับการประเมินทั่วไป";
+  identity.userType = "guest";
+  showScreen("screen-intro");
+});
 document.getElementById("in-code").addEventListener("input", async (e) => {
   const code = String(e.target.value || "").trim();
   const errEl = document.getElementById("err-identity");
