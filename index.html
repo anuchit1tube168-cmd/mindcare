@@ -435,6 +435,7 @@
 
   <button class="btn btn-gold" id="btn-start-cam">เริ่มทำ พร้อมเปิดกล้อง</button>
   <button class="btn btn-ghost" id="btn-start-nocam">เริ่มทำ โดยไม่ใช้กล้อง</button>
+  <a class="admin-link" id="btn-switch-user" style="margin-top:14px; cursor:pointer; color:var(--gold-soft);">🔄 สลับผู้ใช้งาน / แก้ไขรหัสประจำตัว</a>
 </section>
 
 <!-- ================= หน้าคั่นระหว่างชุดคำถาม ================= -->
@@ -699,6 +700,7 @@ function handleIdentify() {
     identity.id = code;
     identity.name = name || ("นักเรียนรหัส " + code);
     identity.userType = "student";
+    saveIdentityLocal();
     showScreen("screen-intro");
     return;
   }
@@ -708,9 +710,18 @@ function handleIdentify() {
     identity.id = "N-" + name;
     identity.name = name;
     identity.userType = "staff";
+    saveIdentityLocal();
     showScreen("screen-intro");
     return;
   }
+}
+
+function saveIdentityLocal() {
+  try {
+    localStorage.setItem("mindcare_student_id", identity.id || "");
+    localStorage.setItem("mindcare_student_name", identity.name || "");
+    localStorage.setItem("mindcare_user_type", identity.userType || "");
+  } catch (e) {}
 }
 
 /* =========================================================
@@ -1746,11 +1757,22 @@ document.getElementById("btn-care-teacher").addEventListener("click", () => {
 });
 document.getElementById("btn-care-result").addEventListener("click", showResult);
 document.getElementById("btn-restart").addEventListener("click", () => location.reload());
+document.getElementById("btn-switch-user").addEventListener("click", () => {
+  try {
+    localStorage.removeItem("mindcare_student_id");
+    localStorage.removeItem("mindcare_student_name");
+    localStorage.removeItem("mindcare_user_type");
+  } catch (e) {}
+  document.getElementById("in-code").value = "";
+  document.getElementById("in-name").value = "";
+  identity.id = null;
+  identity.name = "";
+  showScreen("screen-identify");
+});
 
 /* =========================================================
-   เริ่มต้นระบบ — เรียก LIFF ตอนโหลด (ไม่บล็อกการแสดงผลหน้าแรก)
+   เริ่มต้นระบบ — เรียก LIFF ตอนโหลด (จำรหัสผู้ใช้เก่าอัตโนมัติ)
    ========================================================= */
-// ถ้าเปิดในกรอบ (แอป/iframe) หรือไม่ใช่ HTTPS → โชว์แบนเนอร์เตือนกล้องถาวร
 (function showCamBannerIfBlocked() {
   const inIframe = window.self !== window.top;
   const notSecure = !window.isSecureContext;
@@ -1761,22 +1783,39 @@ document.getElementById("btn-restart").addEventListener("click", () => location.
 })();
 
 initLiff().then(async () => {
-  // เติมชื่อจาก LINE หรือ query string ใส่ช่องพิมพ์หน้าระบุตัวตน (ถ้ามี)
-  if (liffState.displayName) {
-    const nameField = document.getElementById("in-name");
-    if (nameField && !nameField.value) {
-      nameField.value = liffState.displayName;
-    }
-  }
+  // ดึงข้อมูลจาก localStorage (ถ้าเคยระบุตัวตนไว้ในการใช้งานครั้งแรก)
+  let localId = "";
+  let localName = "";
+  let localType = "";
+  try {
+    localId = localStorage.getItem("mindcare_student_id") || "";
+    localName = localStorage.getItem("mindcare_student_name") || "";
+    localType = localStorage.getItem("mindcare_user_type") || "";
+  } catch (e) {}
 
-  // เติมรหัสนักเรียนใส่ช่องพิมพ์หน้าระบุตัวตน (ถ้ามี) ให้ผู้ใช้เห็นและกดถัดไปได้เองเสมอ
-  const preId = liffState.studentId || queryParam("sid");
-  if (preId) {
-    const codeField = document.getElementById("in-code");
-    if (codeField) {
-      codeField.value = preId;
-      codeField.dispatchEvent(new Event("input"));
+  const activeId = liffState.studentId || queryParam("sid") || localId;
+  const activeName = queryParam("nm") || liffState.displayName || localName;
+
+  // เติมค่าใส่ช่องพิมพ์หน้าระบุตัวตนเป็น fallback
+  const codeField = document.getElementById("in-code");
+  const nameField = document.getElementById("in-name");
+  if (codeField && activeId && !codeField.value) codeField.value = activeId;
+  if (nameField && activeName && !nameField.value) nameField.value = activeName;
+
+  // ถ้าเคยระบุตัวตนไว้แล้วจากการใช้งานครั้งแรก -> AUTO: จำค่าอัตโนมัติ และข้ามไปหน้าเริ่มประเมินทันที!
+  if (activeId || activeName) {
+    identity.id = activeId || ("N-" + activeName);
+    identity.name = activeName || ("นักเรียนรหัส " + activeId);
+    identity.userType = localType || (activeId && /^\d{7}$/.test(activeId) ? "student" : "staff");
+    identity.confirmed = true;
+
+    // ทักทายชื่อผู้ใช้งานที่หน้า screen-intro
+    const h1 = document.querySelector("#screen-intro h1");
+    if (h1 && identity.name) {
+      h1.innerHTML = `สวัสดี ${esc(identity.name)}<br>แวะมาเช็คใจกันสักนิดนะ`;
     }
+
+    showScreen("screen-intro");
   }
 });
 
