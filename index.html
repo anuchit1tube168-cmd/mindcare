@@ -1765,33 +1765,22 @@ document.getElementById("btn-restart").addEventListener("click", () => location.
 })();
 
 initLiff().then(async () => {
+  // เติมชื่อจาก LINE หรือ query string ใส่ช่องพิมพ์หน้าระบุตัวตน (ถ้ามี)
   if (liffState.displayName) {
-    const h1 = document.querySelector("#screen-intro h1");
-    if (h1) h1.innerHTML = `สวัสดี ${esc(liffState.displayName)}<br>แวะมาเช็คใจกันสักนิดนะ`;
+    const nameField = document.getElementById("in-name");
+    if (nameField && !nameField.value) {
+      nameField.value = liffState.displayName;
+    }
   }
 
-  // เปิดจาก LINE และเคยผูกรหัสไว้แล้ว → ข้ามหน้ากรอก ไปคำชี้แจงต่อเลย
-  // (ถ้ายังไม่ผูก ก็อยู่หน้าระบุตัวตนตามปกติ — กรอกรหัสหรือชื่อเองได้ ไม่ต้องรออาจารย์)
+  // เติมรหัสนักเรียนใส่ช่องพิมพ์หน้าระบุตัวตน (ถ้ามี) ให้ผู้ใช้เห็นและกดถัดไปได้เองเสมอ
   const preId = liffState.studentId || queryParam("sid");
   if (preId) {
-    identity.id = preId;
-    identity.userType = queryParam("ut") || "student";
-    identity.name = queryParam("nm") || liffState.displayName || "";
-    identity.confirmed = true;
-    try {
-      if (CONFIG.GAS_ENDPOINT && /^\d{7}$/.test(preId)) {
-        const res = await fetch(CONFIG.GAS_ENDPOINT, {
-          method: "POST",
-          body: JSON.stringify({ action: "verifyStudent", studentId: preId }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          identity.name = data.nameMasked || identity.name;
-          identity.year = data.year || "";
-        }
-      }
-    } catch (e) { /* ดึงชื่อไม่ได้ก็ทำแบบประเมินต่อได้ */ }
-    showScreen("screen-intro");
+    const codeField = document.getElementById("in-code");
+    if (codeField) {
+      codeField.value = preId;
+      codeField.dispatchEvent(new Event("input"));
+    }
   }
 });
 
