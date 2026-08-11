@@ -671,30 +671,41 @@ function activeStudentId() {
 function handleIdentify() {
   const errEl = document.getElementById("err-identity");
   const code = String(document.getElementById("in-code").value || "").trim();
-  const name = String(document.getElementById("in-name").value || "").trim().replace(/\s+/g, " ");
-  errEl.textContent = "";
+  let name = String(document.getElementById("in-name").value || "").trim().replace(/\s+/g, " ");
+  if (errEl) errEl.textContent = "";
 
-  if (!name) { errEl.textContent = "กรุณากรอกชื่อ-สกุลของคุณ"; return; }
-  if (name.length < 4) { errEl.textContent = "กรุณากรอกชื่อ-สกุลให้ครบ"; return; }
-  if (/[<>"'&]/.test(name) || /[<>"'&]/.test(code)) {
-    errEl.textContent = "มีอักขระที่ใช้ไม่ได้ กรุณาแก้ไข";
-    return;
-  }
-  if (code && !/^\d{7}$/.test(code)) {
-    errEl.textContent = "รหัสประจำตัวต้องเป็นตัวเลข 7 หลัก — ถ้าไม่มีรหัส เว้นว่างไว้ได้";
-    return;
-  }
-
-  identity.name = name;
-  if (code) {
+  // กรณีที่ 1: กรอกรหัสประจำตัว 7 หลักถูกต้อง
+  if (code && /^\d{7}$/.test(code)) {
     identity.id = code;
+    identity.name = name || ("นักเรียนรหัส " + code);
     identity.userType = "student";
-  } else {
-    identity.id = "N-" + name;   // ไม่มีรหัส = ใช้ชื่อเป็นตัวระบุตัวตนแทน
-    identity.userType = "staff";
+    showScreen("screen-intro");
+    return;
   }
-  identity.year = "";
-  identity.confirmed = true;
+
+  // กรณีที่ 2: กรอกรหัสมาแต่ไม่ครบ 7 หลัก
+  if (code && !/^\d{7}$/.test(code)) {
+    if (errEl) {
+      errEl.style.color = "#E8C57E";
+      errEl.textContent = "รหัสประจำตัวต้องเป็นตัวเลข 7 หลัก (หรือลบออกเพื่อกรอกเฉพาะชื่ออย่างเดียว)";
+    }
+    return;
+  }
+
+  // กรณีที่ 3: เว้นช่องรหัสว่างไว้ และระบุชื่อ
+  if (name) {
+    identity.id = "N-" + name;
+    identity.name = name;
+    identity.userType = "staff";
+    showScreen("screen-intro");
+    return;
+  }
+
+  // กรณีที่ 4: ไม่ได้กรอกทั้งรหัสและชื่อ (เข้าทดลองทำเป็นผู้ใช้ทั่วไปทันที ไม่บล็อกหน้าจอ)
+  const autoGuestId = "G-" + String(Date.now()).slice(-6);
+  identity.id = autoGuestId;
+  identity.name = "ผู้รับการประเมินทั่วไป";
+  identity.userType = "guest";
   showScreen("screen-intro");
 }
 
