@@ -409,7 +409,6 @@
   </div>
 
   <button class="btn btn-gold" id="btn-identify">ถัดไป</button>
-  <button class="btn btn-ghost" id="btn-quick-guest" style="margin-top:10px; border-color:rgba(229,184,90,0.4); color:var(--gold-soft);">⚡ เริ่มทำทันที (โหมดบุคคลทั่วไป)</button>
   <a class="admin-link" id="link-admin" href="mindcare-dashboard.html">สำหรับผู้ดูแล (ต้องมีรหัสเข้าใช้งาน)</a>
 </section>
 
@@ -675,7 +674,27 @@ function handleIdentify() {
   let name = String(document.getElementById("in-name").value || "").trim().replace(/\s+/g, " ");
   if (errEl) errEl.textContent = "";
 
-  // กรณีที่ 1: กรอกรหัสประจำตัว 7 หลักถูกต้อง
+  // ถ้ายังไม่กรอกทั้งรหัสและชื่อ -> แจ้งเตือนให้กรอกก่อนไปต่อ
+  if (!code && !name) {
+    if (errEl) {
+      errEl.style.color = "#E8C57E";
+      errEl.textContent = "กรุณากรอกรหัสประจำตัว 7 หลัก หรือชื่อ-สกุลของคุณก่อนเริ่มทำแบบประเมิน";
+    }
+    document.getElementById("in-code").focus();
+    return;
+  }
+
+  // ถ้าระบุรหัสมา แต่ไม่ครบ 7 หลัก
+  if (code && !/^\d{7}$/.test(code)) {
+    if (errEl) {
+      errEl.style.color = "#E8C57E";
+      errEl.textContent = "รหัสประจำตัวต้องเป็นตัวเลข 7 หลัก (หรือลบออกเพื่อกรอกเฉพาะชื่ออย่างเดียว)";
+    }
+    document.getElementById("in-code").focus();
+    return;
+  }
+
+  // กรณีที่ 1: กรอกรหัสประจำตัว 7 หลัก
   if (code && /^\d{7}$/.test(code)) {
     identity.id = code;
     identity.name = name || ("นักเรียนรหัส " + code);
@@ -684,16 +703,7 @@ function handleIdentify() {
     return;
   }
 
-  // กรณีที่ 2: กรอกรหัสมาแต่ไม่ครบ 7 หลัก
-  if (code && !/^\d{7}$/.test(code)) {
-    if (errEl) {
-      errEl.style.color = "#E8C57E";
-      errEl.textContent = "รหัสประจำตัวต้องเป็นตัวเลข 7 หลัก (หรือลบออกเพื่อกรอกเฉพาะชื่ออย่างเดียว)";
-    }
-    return;
-  }
-
-  // กรณีที่ 3: เว้นช่องรหัสว่างไว้ และระบุชื่อ
+  // กรณีที่ 2: เว้นช่องรหัสว่างไว้ และระบุชื่อ
   if (name) {
     identity.id = "N-" + name;
     identity.name = name;
@@ -701,13 +711,6 @@ function handleIdentify() {
     showScreen("screen-intro");
     return;
   }
-
-  // กรณีที่ 4: ไม่ได้กรอกทั้งรหัสและชื่อ (เข้าทดลองทำเป็นผู้ใช้ทั่วไปทันที ไม่บล็อกหน้าจอ)
-  const autoGuestId = "G-" + String(Date.now()).slice(-6);
-  identity.id = autoGuestId;
-  identity.name = "ผู้รับการประเมินทั่วไป";
-  identity.userType = "guest";
-  showScreen("screen-intro");
 }
 
 /* =========================================================
@@ -1682,13 +1685,6 @@ function showCare() {
 
 /* ---------- ผูกเหตุการณ์ ---------- */
 document.getElementById("btn-identify").addEventListener("click", handleIdentify);
-document.getElementById("btn-quick-guest").addEventListener("click", () => {
-  const autoGuestId = "G-" + String(Date.now()).slice(-6);
-  identity.id = autoGuestId;
-  identity.name = "ผู้รับการประเมินทั่วไป";
-  identity.userType = "guest";
-  showScreen("screen-intro");
-});
 document.getElementById("in-code").addEventListener("input", async (e) => {
   const code = String(e.target.value || "").trim();
   const errEl = document.getElementById("err-identity");
