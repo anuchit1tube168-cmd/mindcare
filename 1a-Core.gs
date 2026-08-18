@@ -98,15 +98,14 @@ function handleSubmit(d) {
 
   appendAssessment(assessmentId, d, risk);
 
-  // สร้างงานติดตาม + แจ้งเตือน (RED / ORANGE / YELLOW หรือมีธงขัดแย้ง)
+  // สร้างงานติดตาม (Alerts) เมื่อไม่ใช่ GREEN
   let alertId = null;
   if (risk.level !== "GREEN") {
     alertId = createAlert(assessmentId, d, risk);
-    notifyTeachers(alertId, d, risk);
-  } else if (d.cameraUsed) {
-    // กรณี GREEN ที่เปิดกล้อง บันทึกผลสำเร็จ
-    notifyTeachers("NORMAL", d, risk);
   }
+
+  // ส่งแจ้งเตือน Telegram ทุกครั้งที่มีการประเมิน
+  notifyTeachers(alertId || "NORMAL", d, risk);
 
   return { ok: true, assessmentId: assessmentId, riskLevel: risk.level, alertId: alertId };
 }
