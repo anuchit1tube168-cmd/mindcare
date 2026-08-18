@@ -54,88 +54,8 @@
   @keyframes float1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-30px,40px); } }
   @keyframes float2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(40px,-30px); } }
 
-  .screen {
-    display: none; flex: 1; flex-direction: column; padding: 24px 20px 32px;
-    max-width: 520px; width: 100%; margin: 0 auto; position: relative; z-index: 1;
-    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
-    will-change: transform, opacity;
-  }
+  .screen { display: none; flex: 1; flex-direction: column; padding: 24px 20px 32px; max-width: 520px; width: 100%; margin: 0 auto; position: relative; z-index: 1; }
   .screen.active { display: flex; }
-
-  /* iOS Push/Pop Screen Slide Animation */
-  .screen.slide-in-right {
-    animation: iosSlideInRight 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-  }
-  .screen.slide-out-left {
-    animation: iosSlideOutLeft 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-  }
-  .screen.slide-in-left {
-    animation: iosSlideInLeft 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-  }
-  .screen.slide-out-right {
-    animation: iosSlideOutRight 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-  }
-
-  @keyframes iosSlideInRight {
-    0% { transform: translateX(100%); opacity: 0.3; }
-    100% { transform: translateX(0); opacity: 1; }
-  }
-  @keyframes iosSlideOutLeft {
-    0% { transform: translateX(0); opacity: 1; }
-    100% { transform: translateX(-28%); opacity: 0.2; }
-  }
-  @keyframes iosSlideInLeft {
-    0% { transform: translateX(-28%); opacity: 0.3; }
-    100% { transform: translateX(0); opacity: 1; }
-  }
-  @keyframes iosSlideOutRight {
-    0% { transform: translateX(0); opacity: 1; }
-    100% { transform: translateX(100%); opacity: 0.2; }
-  }
-
-  /* Responsive Tablet & iPad Adaptations (>= 768px) */
-  @media (min-width: 768px) {
-    body {
-      padding: 32px 20px;
-      justify-content: center;
-      align-items: center;
-      background: linear-gradient(160deg, #0B2E1F 0%, #08251A 50%, #041A12 100%);
-    }
-    .screen {
-      max-width: 640px;
-      padding: 36px 36px 42px;
-      background: rgba(18, 64, 43, 0.4);
-      -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      border-radius: 28px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.2);
-    }
-    h1 { font-size: 30px; }
-    h2 { font-size: 22px; }
-    .q-text { font-size: 26px; min-height: 2.8em; }
-    .answers { gap: 14px; }
-    .answer-btn { padding: 18px 22px; font-size: 17.5px; border-radius: 18px; }
-    .orb-1 { width: 480px; height: 480px; }
-    .orb-2 { width: 440px; height: 440px; }
-    #cam-wrap { width: 110px; height: 110px; right: 28px; bottom: 28px; }
-    #cam-label { right: 28px; bottom: 146px; font-size: 11.5px; }
-  }
-
-  /* Responsive Desktop & PC Adaptations (>= 1024px) */
-  @media (min-width: 1024px) {
-    .screen {
-      max-width: 720px;
-      padding: 42px 48px;
-    }
-    h1 { font-size: 32px; }
-    .card { padding: 24px; border-radius: 24px; }
-    .btn { padding: 18px; font-size: 18px; border-radius: 18px; }
-    .answers.grid-mode {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-  }
 
   .eyebrow { font-size: 12px; letter-spacing: 0.18em; color: var(--gold); text-transform: uppercase; margin-bottom: 6px; }
   h1 { font-size: 26px; font-weight: 800; line-height: 1.4; letter-spacing: -0.01em; }
@@ -271,53 +191,30 @@
   }
   @media (prefers-reduced-motion: reduce) { #breath-circle { transition: none; } }
 
-  /* ---------- กล้อง preview + แถบปุ่มควบคุมขยับ ---------- */
+  /* ---------- กล้อง preview ----------
+     bottom ยกสูงพ้นแนวปุ่ม nav-row (ปุ่ม "ข้อถัดไป") เพื่อไม่ให้บังปุ่ม
+     pointer-events:none กันไว้อีกชั้น — วงกล้องเป็นแค่ตัวแสดงผล ไม่มี
+     ปุ่มกดใดๆ ในตัวมันเอง ปล่อยให้แตะทะลุไปโดนปุ่มด้านล่างได้เสมอ
+     แม้ระยะห่างจะคลาดเคลื่อนในบางขนาดจอ */
   #cam-wrap {
-    position: fixed; right: 14px; bottom: 14px; z-index: 999;
-    width: 92px; height: 92px; border-radius: 50%;
+    position: fixed; right: 14px; top: calc(14px + env(safe-area-inset-top)); z-index: 50;
+    width: 76px; height: 76px; border-radius: 50%;
     display: none; align-items: center; justify-content: center;
-    touch-action: none; user-select: none; cursor: grab;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    transition: width 0.3s ease, height 0.3s ease, border-radius 0.3s ease;
+    pointer-events: none; /* ป้องกันทับปุ่มอื่นเสมอ ไม่ว่าจอขนาดไหน — กล้องนี้ไม่มีปุ่มกดอยู่แล้ว */
+    pointer-events: none;
   }
-  #cam-wrap:active { cursor: grabbing; }
   #cam-wrap.on { display: flex; }
-  #cam-wrap.size-large { width: 140px; height: 140px; border-radius: 20px; }
-  #cam-wrap.size-large #cam-video { border-radius: 18px; }
-  #cam-wrap.size-large #cam-ring { border-radius: 24px; }
-  #cam-wrap.minimized { width: 48px; height: 48px; }
-
-  #cam-controls {
-    position: absolute; top: -38px; left: 50%; transform: translateX(-50%);
-    display: none; gap: 6px; background: rgba(14,43,28,0.92);
-    border: 1px solid var(--glass-border); padding: 4px 8px; border-radius: 20px;
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-    white-space: nowrap; z-index: 1000;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
-  }
-  #cam-wrap.on:hover #cam-controls, #cam-wrap.show-ctrl #cam-controls { display: flex; }
-
-  .cam-btn {
-    background: var(--glass-bg); border: 1px solid rgba(255,255,255,0.25);
-    color: var(--gold-soft); width: 28px; height: 28px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; cursor: pointer; transition: transform 0.15s, background 0.15s;
-    user-select: none; -webkit-tap-highlight-color: transparent;
-  }
-  .cam-btn:active { transform: scale(0.85); }
-  .cam-btn:hover { background: rgba(229,182,90,0.3); color: #FFF; }
-
-  #cam-ring { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--gold); animation: breathe 3s ease-in-out infinite; pointer-events: none; }
+  #cam-ring { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--gold); animation: breathe 3s ease-in-out infinite; }
   @keyframes breathe { 0%,100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.07); opacity: .45; } }
   @media (prefers-reduced-motion: reduce) { #cam-ring { animation: none; } }
-  #cam-video { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; transform: scaleX(-1); border: 2px solid var(--forest-soft); background: #000; pointer-events: none; }
-  #cam-status { position: absolute; bottom: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--forest-deep); background: var(--cream-dim); pointer-events: none; }
+  #cam-video { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; transform: scaleX(-1); border: 2px solid var(--forest-soft); background: #000; }
+  #cam-status { position: absolute; bottom: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--forest-deep); background: var(--cream-dim); }
   #cam-status.tracking { background: var(--ok); }
   #cam-label {
-    position: fixed; right: 14px; bottom: 110px; z-index: 998;
-    font-size: 10.5px; color: var(--cream-dim); display: none; pointer-events: none;
-    background: rgba(14,43,28,0.88); padding: 3px 8px; border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    position: fixed; right: 14px; top: calc(96px + env(safe-area-inset-top)); z-index: 50;
+    font-size: 10.5px; color: var(--cream-dim); display: none;
+    background: rgba(14,43,28,0.85); padding: 3px 8px; border-radius: 8px;
+    pointer-events: none;
   }
   #cam-label.on { display: block; }
 
@@ -465,7 +362,6 @@
 
   <button class="btn btn-gold" id="btn-start-cam">เริ่มทำ พร้อมเปิดกล้อง</button>
   <button class="btn btn-ghost" id="btn-start-nocam">เริ่มทำ โดยไม่ใช้กล้อง</button>
-  <a class="admin-link" id="btn-switch-user" style="margin-top:14px; cursor:pointer; color:var(--gold-soft);">🔄 สลับผู้ใช้งาน / แก้ไขรหัสประจำตัว</a>
 </section>
 
 <!-- ================= หน้าคั่นระหว่างชุดคำถาม ================= -->
@@ -556,14 +452,9 @@
   <button class="btn btn-ghost" id="btn-care-result" style="max-width:360px; margin:18px auto 0;">ดูผลการประเมินทั้งหมด</button>
 </section>
 
-<!-- กล้อง preview + แถบปุ่มควบคุมขยับกล้อง -->
-<div id="cam-label">วิเคราะห์บนเครื่อง · แตะขยับหรือลากได้</div>
-<div id="cam-wrap" title="ลากหรือแตะเพื่อควบคุมกล้อง">
-  <div id="cam-controls">
-    <button class="cam-btn" id="btn-cam-pos" title="ย้ายมุมกล้อง (4 มุม)">📌</button>
-    <button class="cam-btn" id="btn-cam-size" title="ย่อ/ขยายกล้อง">🔍</button>
-    <button class="cam-btn" id="btn-cam-flip" title="กลับแนวกระจก">↔️</button>
-  </div>
+<!-- กล้อง preview + สถานะ -->
+<div id="cam-label">วิเคราะห์บนเครื่อง · ไม่บันทึกภาพ</div>
+<div id="cam-wrap">
   <div id="cam-ring"></div>
   <video id="cam-video" autoplay playsinline muted></video>
   <div id="cam-status"></div>
@@ -598,7 +489,7 @@
    - STUDENT_ID: fallback เมื่อไม่มี LIFF — ระบบจริงจะดึงจาก LINE
    ========================================================= */
 const CONFIG = {
-  GAS_ENDPOINT: "https://script.google.com/macros/s/AKfycbwznYIlgzTSGWU0_JV0HSafZ1tpDHWp9FX-t10vL71EXOPNKnzxB2fVTaCG9i1rpUAF/exec",
+  GAS_ENDPOINT: "https://script.google.com/macros/s/AKfycbyCdey2-zT4bqeGULe88JXVj-ljnXL-1nYWUkrulVsZSGhzmEni7PVS2czksEGMg-sR/exec",
   LIFF_ID: "2010984231-Z7kbSIPp",
   STUDENT_ID: "TEST-001",    // ใช้เมื่อไม่มี LIFF (โหมดทดสอบ)
 };
@@ -707,56 +598,31 @@ function activeStudentId() {
 function handleIdentify() {
   const errEl = document.getElementById("err-identity");
   const code = String(document.getElementById("in-code").value || "").trim();
-  let name = String(document.getElementById("in-name").value || "").trim().replace(/\s+/g, " ");
-  if (errEl) errEl.textContent = "";
+  const name = String(document.getElementById("in-name").value || "").trim().replace(/\s+/g, " ");
+  errEl.textContent = "";
 
-  // ถ้ายังไม่กรอกทั้งรหัสและชื่อ -> แจ้งเตือนให้กรอกก่อนไปต่อ
-  if (!code && !name) {
-    if (errEl) {
-      errEl.style.color = "#E8C57E";
-      errEl.textContent = "กรุณากรอกรหัสประจำตัว 7 หลัก หรือชื่อ-สกุลของคุณก่อนเริ่มทำแบบประเมิน";
-    }
-    document.getElementById("in-code").focus();
+  if (!name) { errEl.textContent = "กรุณากรอกชื่อ-สกุลของคุณ"; return; }
+  if (name.length < 4) { errEl.textContent = "กรุณากรอกชื่อ-สกุลให้ครบ"; return; }
+  if (/[<>"'&]/.test(name) || /[<>"'&]/.test(code)) {
+    errEl.textContent = "มีอักขระที่ใช้ไม่ได้ กรุณาแก้ไข";
     return;
   }
-
-  // ถ้าระบุรหัสมา แต่ไม่ครบ 7 หลัก
   if (code && !/^\d{7}$/.test(code)) {
-    if (errEl) {
-      errEl.style.color = "#E8C57E";
-      errEl.textContent = "รหัสประจำตัวต้องเป็นตัวเลข 7 หลัก (หรือลบออกเพื่อกรอกเฉพาะชื่ออย่างเดียว)";
-    }
-    document.getElementById("in-code").focus();
+    errEl.textContent = "รหัสประจำตัวต้องเป็นตัวเลข 7 หลัก — ถ้าไม่มีรหัส เว้นว่างไว้ได้";
     return;
   }
 
-  // กรณีที่ 1: กรอกรหัสประจำตัว 7 หลัก
-  if (code && /^\d{7}$/.test(code)) {
+  identity.name = name;
+  if (code) {
     identity.id = code;
-    identity.name = name || ("นักเรียนรหัส " + code);
     identity.userType = "student";
-    saveIdentityLocal();
-    showScreen("screen-intro");
-    return;
-  }
-
-  // กรณีที่ 2: เว้นช่องรหัสว่างไว้ และระบุชื่อ
-  if (name) {
-    identity.id = "N-" + name;
-    identity.name = name;
+  } else {
+    identity.id = "N-" + name;   // ไม่มีรหัส = ใช้ชื่อเป็นตัวระบุตัวตนแทน
     identity.userType = "staff";
-    saveIdentityLocal();
-    showScreen("screen-intro");
-    return;
   }
-}
-
-function saveIdentityLocal() {
-  try {
-    localStorage.setItem("mindcare_student_id", identity.id || "");
-    localStorage.setItem("mindcare_student_name", identity.name || "");
-    localStorage.setItem("mindcare_user_type", identity.userType || "");
-  } catch (e) {}
+  identity.year = "";
+  identity.confirmed = true;
+  showScreen("screen-intro");
 }
 
 /* =========================================================
@@ -1200,107 +1066,6 @@ function stopCamera() {
   document.getElementById("cam-label").classList.remove("on");
 }
 
-/* ---------------------------------------------------------
-   ระบบลาก/ย้ายตำแหน่งกล้อง (Draggable & Touch Controls)
-   --------------------------------------------------------- */
-(function setupDraggableCamera() {
-  const wrap = document.getElementById("cam-wrap");
-  const btnPos = document.getElementById("btn-cam-pos");
-  const btnSize = document.getElementById("btn-cam-size");
-  const btnFlip = document.getElementById("btn-cam-flip");
-  const video = document.getElementById("cam-video");
-  if (!wrap) return;
-
-  // 1. ปุ่มย้ายมุม 4 ทิศทาง (ขวาล่าง -> ซ้ายล่าง -> ซ้ายบน -> ขวาบน -> ขวาล่าง)
-  const corners = [
-    { right: "14px", bottom: "14px", left: "auto", top: "auto" },
-    { left: "14px", bottom: "14px", right: "auto", top: "auto" },
-    { left: "14px", top: "14px", right: "auto", bottom: "auto" },
-    { right: "14px", top: "14px", left: "auto", bottom: "auto" },
-  ];
-  let cornerIdx = 0;
-  btnPos?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    cornerIdx = (cornerIdx + 1) % corners.length;
-    const c = corners[cornerIdx];
-    wrap.style.left = c.left;
-    wrap.style.top = c.top;
-    wrap.style.right = c.right;
-    wrap.style.bottom = c.bottom;
-    const label = document.getElementById("cam-label");
-    if (label) {
-      label.style.left = c.left; label.style.top = c.top !== "auto" ? "120px" : "auto";
-      label.style.right = c.right; label.style.bottom = c.bottom !== "auto" ? "110px" : "auto";
-    }
-  });
-
-  // 2. ปุ่มย่อ/ขยายกล้อง (ปกติ -> ใหญ่ -> เล็กมินิ -> ปกติ)
-  let sizeState = 0; // 0=ปกติ(92px), 1=ใหญ่(140px), 2=มินิ(48px)
-  btnSize?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    sizeState = (sizeState + 1) % 3;
-    wrap.classList.remove("size-large", "minimized");
-    if (sizeState === 1) wrap.classList.add("size-large");
-    if (sizeState === 2) wrap.classList.add("minimized");
-  });
-
-  // 3. ปุ่มกลับแนวกระจก (Flip Mirror)
-  let flipped = true;
-  btnFlip?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    flipped = !flipped;
-    video.style.transform = flipped ? "scaleX(-1)" : "scaleX(1)";
-  });
-
-  // 4. แตะค้างลากกล้องได้ตามใจบนหน้าจอ (Touch & Mouse Drag)
-  let isDragging = false, startX, startY;
-
-  const dragStart = (e) => {
-    if (e.target.closest(".cam-btn")) return;
-    isDragging = true;
-    wrap.classList.add("show-ctrl");
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const rect = wrap.getBoundingClientRect();
-    startX = clientX - rect.left;
-    startY = clientY - rect.top;
-  };
-
-  const dragMove = (e) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    let newX = clientX - startX;
-    let newY = clientY - startY;
-
-    newX = Math.max(8, Math.min(window.innerWidth - wrap.offsetWidth - 8, newX));
-    newY = Math.max(8, Math.min(window.innerHeight - wrap.offsetHeight - 8, newY));
-
-    wrap.style.left = newX + "px";
-    wrap.style.top = newY + "px";
-    wrap.style.right = "auto";
-    wrap.style.bottom = "auto";
-  };
-
-  const dragEnd = () => {
-    isDragging = false;
-    setTimeout(() => wrap.classList.remove("show-ctrl"), 3000);
-  };
-
-  wrap.addEventListener("mousedown", dragStart);
-  window.addEventListener("mousemove", dragMove);
-  window.addEventListener("mouseup", dragEnd);
-
-  wrap.addEventListener("touchstart", dragStart, { passive: false });
-  window.addEventListener("touchmove", dragMove, { passive: false });
-  window.addEventListener("touchend", dragEnd);
-
-  wrap.addEventListener("click", () => {
-    wrap.classList.toggle("show-ctrl");
-  });
-})();
-
 /* ==========================================================
    computeIndex — ดัชนี "ควรชวนคุย" 0–100
    5 มิติ อิง FACS + งานวิจัย peer-reviewed
@@ -1416,40 +1181,12 @@ function isConflict(idx) {
   return !!(idx && selfLow && idx.index >= 55);
 }
 
-function captureCamSnapshot() {
-  const video = document.getElementById("cam-video");
-  if (!signals.enabled || !video || video.readyState < 2) return null;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = 480;
-    canvas.height = Math.round(480 * ((video.videoHeight || 360) / (video.videoWidth || 480)));
-    const ctx = canvas.getContext("2d");
-    // พลิกแนวนอนกระจกเงาเหมือนกล้องจริง
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.75); // base64 string
-  } catch (e) {
-    console.warn("Snapshot failed:", e);
-    return null;
-  }
-}
-
 async function submitResultOnce() {
   if (_submitted) return;
   _submitted = true;
   if (!CONFIG.GAS_ENDPOINT) return; // โหมดทดสอบหน้าเว็บอย่างเดียว
 
   const idx = getBehaviorIndex();
-  const conflict = isConflict(idx);
-
-  // แคปภาพอัตโนมัติเมื่อเปิดกล้อง + อยู่ในเคสเฝ้าระวัง/เสี่ยง (ดัชนีกล้อง >= 45 หรือมีธงขัดแย้ง หรือ 8Q/9Q มีคะแนน)
-  let snapshot = null;
-  const hasRiskScore = (state.results.q8?.score ?? 0) >= 1 || (state.results.q9?.score ?? 0) >= 7 || (state.results.st5?.score ?? 0) >= 8;
-  if (signals.enabled && (conflict || hasRiskScore || (idx && idx.index >= 45))) {
-    snapshot = captureCamSnapshot();
-  }
-
   const payload = {
     action: "submitAssessment",
     studentId: activeStudentId(),
@@ -1463,11 +1200,10 @@ async function submitResultOnce() {
     behaviorFlags: idx ? idx.flags : null,
     behaviorSubscores: idx ? idx.subscores : null,
     behaviorDetail: idx ? idx.detail : null,
-    conflictFlag: conflict,
+    conflictFlag: isConflict(idx),
     cameraUsed: signals.enabled,
     displayName: identity.name || queryParam("nm"),
     userType: identity.userType || queryParam("ut") || "student",
-    faceSnapshot: snapshot, // ส่งภาพถ่ายใบหน้ากรณีเฝ้าระวัง
   };
 
   try {
@@ -1577,26 +1313,10 @@ function endBreath() {
 /* =========================================================
    ส่วนที่ 4: เอนจิน flow + การแสดงผล
    ========================================================= */
-let activeScreenId = "screen-identify";
-function showScreen(id, direction = "push") {
-  const curr = document.getElementById(activeScreenId);
-  const next = document.getElementById(id);
-  if (!next) return;
-
-  if (curr && curr !== next) {
-    curr.classList.remove("active", "slide-in-right", "slide-in-left", "slide-out-left", "slide-out-right");
-    curr.classList.add(direction === "push" ? "slide-out-left" : "slide-out-right");
-    setTimeout(() => {
-      if (curr.id !== activeScreenId) {
-        curr.classList.remove("active", "slide-out-left", "slide-out-right");
-      }
-    }, 350);
-  }
-
-  next.classList.remove("slide-in-right", "slide-in-left", "slide-out-left", "slide-out-right");
-  next.classList.add("active", direction === "push" ? "slide-in-right" : "slide-in-left");
-  activeScreenId = id;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  window.scrollTo(0, 0);
 }
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -1832,43 +1552,6 @@ function showCare() {
 
 /* ---------- ผูกเหตุการณ์ ---------- */
 document.getElementById("btn-identify").addEventListener("click", handleIdentify);
-document.getElementById("in-code").addEventListener("input", async (e) => {
-  const code = String(e.target.value || "").trim();
-  const errEl = document.getElementById("err-identity");
-  if (code.length === 7 && /^\d{7}$/.test(code)) {
-    errEl.style.color = "#E5B65A";
-    errEl.textContent = "กำลังค้นหารหัสนักเรียนในระบบ...";
-    if (CONFIG.GAS_ENDPOINT) {
-      try {
-        const res = await fetch(CONFIG.GAS_ENDPOINT, {
-          method: "POST",
-          body: JSON.stringify({ action: "verifyStudent", studentId: code }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          errEl.style.color = "#5FB77E";
-          errEl.textContent = `✓ พบข้อมูลนักเรียน (${data.nameMasked || "ในทะเบียน วพอ."})`;
-          const nameField = document.getElementById("in-name");
-          if (!nameField.value && data.nameMasked) {
-            nameField.value = data.nameMasked;
-          }
-          identity.year = data.year || "";
-        } else {
-          errEl.style.color = "#C9C2AE";
-          errEl.textContent = "ไม่พบรหัสในทะเบียน สามารถกรอกชื่อ-สกุลในช่องด้านล่างได้เลย";
-        }
-      } catch (err) {
-        errEl.style.color = "#C9C2AE";
-        errEl.textContent = "รหัสประจำตัว 7 หลักถูกต้อง กรอกชื่อ-สกุลในช่องด้านล่างต่อได้เลย";
-      }
-    } else {
-      errEl.style.color = "#5FB77E";
-      errEl.textContent = "✓ รหัสประจำตัว 7 หลักถูกต้อง กรอกชื่อ-สกุลในช่องด้านล่างต่อได้เลย";
-    }
-  } else if (code.length === 0) {
-    errEl.textContent = "";
-  }
-});
 document.getElementById("in-code").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("in-name").focus();
 });
@@ -1893,22 +1576,11 @@ document.getElementById("btn-care-teacher").addEventListener("click", () => {
 });
 document.getElementById("btn-care-result").addEventListener("click", showResult);
 document.getElementById("btn-restart").addEventListener("click", () => location.reload());
-document.getElementById("btn-switch-user").addEventListener("click", () => {
-  try {
-    localStorage.removeItem("mindcare_student_id");
-    localStorage.removeItem("mindcare_student_name");
-    localStorage.removeItem("mindcare_user_type");
-  } catch (e) {}
-  document.getElementById("in-code").value = "";
-  document.getElementById("in-name").value = "";
-  identity.id = null;
-  identity.name = "";
-  showScreen("screen-identify");
-});
 
 /* =========================================================
-   เริ่มต้นระบบ — เรียก LIFF ตอนโหลด (จำรหัสผู้ใช้เก่าอัตโนมัติ)
+   เริ่มต้นระบบ — เรียก LIFF ตอนโหลด (ไม่บล็อกการแสดงผลหน้าแรก)
    ========================================================= */
+// ถ้าเปิดในกรอบ (แอป/iframe) หรือไม่ใช่ HTTPS → โชว์แบนเนอร์เตือนกล้องถาวร
 (function showCamBannerIfBlocked() {
   const inIframe = window.self !== window.top;
   const notSecure = !window.isSecureContext;
@@ -1919,38 +1591,32 @@ document.getElementById("btn-switch-user").addEventListener("click", () => {
 })();
 
 initLiff().then(async () => {
-  // ดึงข้อมูลจาก localStorage (ถ้าเคยระบุตัวตนไว้ในการใช้งานครั้งแรก)
-  let localId = "";
-  let localName = "";
-  let localType = "";
-  try {
-    localId = localStorage.getItem("mindcare_student_id") || "";
-    localName = localStorage.getItem("mindcare_student_name") || "";
-    localType = localStorage.getItem("mindcare_user_type") || "";
-  } catch (e) {}
-
-  const activeId = liffState.studentId || queryParam("sid") || localId;
-  const activeName = queryParam("nm") || liffState.displayName || localName;
-
-  // เติมค่าใส่ช่องพิมพ์หน้าระบุตัวตนเป็น fallback
-  const codeField = document.getElementById("in-code");
-  const nameField = document.getElementById("in-name");
-  if (codeField && activeId && !codeField.value) codeField.value = activeId;
-  if (nameField && activeName && !nameField.value) nameField.value = activeName;
-
-  // ถ้าเคยระบุตัวตนไว้แล้วจากการใช้งานครั้งแรก -> AUTO: จำค่าอัตโนมัติ และข้ามไปหน้าเริ่มประเมินทันที!
-  if (activeId || activeName) {
-    identity.id = activeId || ("N-" + activeName);
-    identity.name = activeName || ("นักเรียนรหัส " + activeId);
-    identity.userType = localType || (activeId && /^\d{7}$/.test(activeId) ? "student" : "staff");
-    identity.confirmed = true;
-
-    // ทักทายชื่อผู้ใช้งานที่หน้า screen-intro
+  if (liffState.displayName) {
     const h1 = document.querySelector("#screen-intro h1");
-    if (h1 && identity.name) {
-      h1.innerHTML = `สวัสดี ${esc(identity.name)}<br>แวะมาเช็คใจกันสักนิดนะ`;
-    }
+    if (h1) h1.innerHTML = `สวัสดี ${esc(liffState.displayName)}<br>แวะมาเช็คใจกันสักนิดนะ`;
+  }
 
+  // เปิดจาก LINE และเคยผูกรหัสไว้แล้ว → ข้ามหน้ากรอก ไปคำชี้แจงต่อเลย
+  // (ถ้ายังไม่ผูก ก็อยู่หน้าระบุตัวตนตามปกติ — กรอกรหัสหรือชื่อเองได้ ไม่ต้องรออาจารย์)
+  const preId = liffState.studentId || queryParam("sid");
+  if (preId) {
+    identity.id = preId;
+    identity.userType = queryParam("ut") || "student";
+    identity.name = queryParam("nm") || liffState.displayName || "";
+    identity.confirmed = true;
+    try {
+      if (CONFIG.GAS_ENDPOINT && /^\d{7}$/.test(preId)) {
+        const res = await fetch(CONFIG.GAS_ENDPOINT, {
+          method: "POST",
+          body: JSON.stringify({ action: "verifyStudent", studentId: preId }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          identity.name = data.nameMasked || identity.name;
+          identity.year = data.year || "";
+        }
+      }
+    } catch (e) { /* ดึงชื่อไม่ได้ก็ทำแบบประเมินต่อได้ */ }
     showScreen("screen-intro");
   }
 });

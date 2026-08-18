@@ -1,0 +1,135 @@
+/* ==========================================================
+ * ไฟล์ใหม่: Guardian — นัดหมายแพทย์ + แจ้งเตือนหน่วยปกครอง
+ *
+ * สมมติฐาน: "ปกครอง" หมายถึงหน่วยปกครองของวิทยาลัย (เจ้าหน้าที่ภายใน)
+ * ไม่ใช่ผู้ปกครอง/บิดามารดาของนักเรียน — ถ้าหมายถึงบุคคลภายนอกจริง
+ * ต้องออกแบบเรื่องความยินยอม (PDPA) เพิ่มก่อนใช้งานจริง
+ *
+ * วิธีติดตั้ง:
+ * 1) รันฟังก์ชัน ensureAppointmentColumns และ ensureTeacherRoleColumn
+ *    ครั้งเดียว (เลือกจาก dropdown แล้วกด Run ทีละอัน)
+ * 2) ในชีต Teachers เพิ่มคอลัมน์ "role" จะถูกสร้างให้อัตโนมัติ —
+ *    ไปกรอกคำว่า "ปกครอง" ในแถวของเจ้าหน้าที่หน่วยปกครอง
+ * 3) ต้องแก้ไฟล์ Core เพิ่ม 2 จุด (ดูคำแนะนำท้ายไฟล์นี้)
+ * ========================================================== */
+
+/** เพิ่มคอลัมน์นัดหมายแพทย์ในชีต Alerts ถ้ายังไม่มี (รันซ้ำได้ปลอดภัย) */
+function ensureAppointmentColumns() {
+  const sh = getSheet(SHEETS.ALERTS);
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  ["appointmentAt", "appointmentNote", "appointmentNotifiedAt"].forEach(function (h) {
+    if (headers.indexOf(h) === -1) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue(h);
+    }
+  });
+}
+
+/** เพิ่มคอลัมน์ role ในชีต Teachers ถ้ายังไม่มี
+ *  ใส่คำว่า "ปกครอง" ในคอลัมน์นี้สำหรับแถวที่เป็นเจ้าหน้าที่หน่วยปกครอง
+ *  แถวที่เว้นว่าง = อาจารย์ที่ปรึกษาทั่วไป (ได้รับแจ้งเตือนทุกระดับตามเดิม) */
+function ensureTeacherRoleColumn() {
+  const sh = getSheet(SHEETS.TEACHERS);
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  if (headers.indexOf("role") === -1) {
+    sh.getRange(1, sh.getLastColumn() + 1).setValue("role");
+  }
+}
+
+/** LINE userId ของเจ้าหน้าที่หน่วยปกครอง (แถวที่คอลัมน์ role มีคำว่า "ปกครอง") */
+function getGuardianUnitLineIds() {
+  const sh = getSheet(SHEETS.TEACHERS);
+  const rows = sh.getDataRange().getValues();
+  const headers = rows[0];
+  const roleCol = headers.indexOf("role");
+  if (roleCol === -1) return [];
+  const ids = [];
+  for (let i = 1; i < rows.length; i++) {
+    const lineUserId = String(rows[i][2] || "").trim();
+    const active = rows[i][3] === true || String(rows[i][3]).toUpperCase() === "TRUE";
+    const role = String(rows[i][roleCol] || "");
+    if (lineUserId && active && role.indexOf("ปกครอง") !== -1) ids.push(lineUserId);
+  }
+  return ids;
+}
+
+/** แจ้งเตือนหน่วยปกครองโดยตรงผ่าน LINE — ใช้เฉพาะเคสรุนแรงสุด (RED) เท่านั้น
+ *  ไม่ผ่าน sendAlert/quota guard เพราะถือเป็นการแจ้งฉุกเฉินที่ต้องถึงแน่นอน */
+function notifyGuardianUnit(text) {
+  const token = PropertiesService.getScriptProperties().getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  if (!token) return;
+  ensureTeacherRoleColumn();
+  const ids = getGuardianUnitLineIds();
+  if (ids.length === 0) {
+    logError("notifyGuardianUnit", "ไม่มีเจ้าหน้าที่หน่วยปกครองที่ active ในชีต Teachers", "");
+    return;
+  }
+  ids.forEach(function (userId) { pushLineMessage(token, userId, text); });
+}
+
+/* ==========================================================
+ * นัดหมายแพทย์ — เรียกจาก dashboard เมื่ออาจารย์กำหนดวันนัด
+ * ========================================================== */
+
+/** บันทึกนัดหมาย + แจ้งเตือนนักเรียนเจ้าของเคส + อาจารย์ + หน่วยปกครอง (ถ้าเคสแดง) */
+function handleSetAppointment(d) {
+  if (!d.alertId || !d.appointmentAt) throw new Error("missing alertId/appointmentAt");
+  ensureAppointmentColumns();
+
+  const sh = getSheet(SHEETS.ALERTS);
+  const rows = sh.getDataRange().getValues();
+  const headers = rows[0];
+  const colAt = headers.indexOf("appointmentAt") + 1;
+  const colNote = headers.indexOf("appointmentNote") + 1;
+  const colNotified = headers.indexOf("appointmentNotifiedAt") + 1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][1] !== d.alertId) continue; // คอลัมน์ B = alertId
+
+    const row = i + 1;
+    const apptDate = new Date(d.appointmentAt);
+    sh.getRange(row, colAt).setValue(apptDate);
+    if (d.note) sh.getRange(row, colNote).setValue(sanitize(d.note));
+
+    const studentId = rows[i][3];
+    const riskLevel = rows[i][4];
+    const apptText = Utilities.formatDate(apptDate, "Asia/Bangkok", "dd/MM/yyyy HH:mm");
+
+    // 1) แจ้งนักเรียนเจ้าของเคสโดยตรง (ต้องผูก LINE ไว้แล้ว)
+    notifyStudentAppointment(studentId, apptText, d.note || "");
+
+    // 2) แจ้งอาจารย์ว่าบันทึกนัดแล้ว
+    const staffText =
+      "📅 บันทึกนัดหมายแพทย์แล้ว\n" +
+      "รหัสงาน: " + d.alertId + "\n" +
+      "รหัสนักเรียน: " + studentId + "\n" +
+      "วันเวลานัด: " + apptText +
+      (d.note ? ("\nหมายเหตุ: " + d.note) : "");
+    sendAlert(staffText, riskLevel === "RED" ? "RED" : "REPORT");
+
+    // 3) เคสระดับแดง (พบแพทย์ทันทีตามผนวก ค) แจ้งหน่วยปกครองเพิ่มทันที
+    if (riskLevel === "RED") notifyGuardianUnit(staffText);
+
+    sh.getRange(row, colNotified).setValue(new Date());
+    return { ok: true };
+  }
+  return { ok: false, error: "alert not found" };
+}
+
+/** แจ้งนักเรียนเจ้าของเคสเรื่องนัดหมาย ผ่าน LINE โดยตรง
+ *  ข้อจำกัดสำคัญ: ส่งได้เฉพาะนักเรียนที่เพิ่มบัญชี LINE ของวิทยาลัยเป็นเพื่อนแล้ว
+ *  (เงื่อนไขบังคับของ LINE Messaging API push message) */
+function notifyStudentAppointment(studentId, apptText, note) {
+  const token = PropertiesService.getScriptProperties().getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  if (!token) return;
+  const bindings = getSheet(SHEETS.BINDINGS).getDataRange().getValues();
+  for (let i = 1; i < bindings.length; i++) {
+    if (String(bindings[i][1]).trim() !== String(studentId).trim()) continue;
+    const text =
+      "📅 คุณมีนัดพบแพทย์\n" +
+      "วันเวลา: " + apptText +
+      (note ? ("\nหมายเหตุ: " + note) : "") +
+      "\n\nมีข้อสงสัยติดต่ออาจารย์ผู้ดูแลได้เลยนะ";
+    pushLineMessage(token, bindings[i][0], text);
+    return;
+  }
+}
