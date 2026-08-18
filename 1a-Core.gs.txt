@@ -291,59 +291,61 @@ function createAlert(assessmentId, d, risk) {
 }
 
 function notifyTeachers(alertId, d, risk) {
-  const icon = risk.level === "RED" ? "🚨🔴" : (risk.level === "ORANGE" ? "⚠️🟠" : "🟡");
-  const slaText = risk.level === "RED" ? "ติดต่อด่วนที่สุด ภายใน 1 ชม." : (risk.level === "ORANGE" ? "ติดต่อภายใน 24 ชม." : "เฝ้าระวัง/ติดตาม");
+  const isRed = risk.level === "RED";
+  const isOrange = risk.level === "ORANGE";
+  const icon = isRed ? "🔴" : (isOrange ? "🟠" : "🟡");
+  const slaText = isRed ? "RED (พบแพทย์ทันที - SLA 1 ชั่วโมง)" : (isOrange ? "ORANGE (พบบุคลากรทางการแพทย์ - SLA 24 ชั่วโมง)" : "YELLOW (เฝ้าระวัง/พูดคุย)");
   const nameStr = d.displayName ? d.displayName : ("รหัส " + d.studentId);
-  const behVal = (d.behaviorIndex !== null && d.behaviorIndex !== undefined) ? (d.behaviorIndex + "/100") : "ไม่ได้เปิดกล้อง";
+  const behScore = (d.behaviorIndex !== null && d.behaviorIndex !== undefined) ? d.behaviorIndex : "-";
+
+  // แปลผลคะแนนแต่ละชุด
+  const st5Level = d.st5Score >= 10 ? " (ระดับสูง)" : (d.st5Score >= 8 ? " (ปานกลาง)" : " (ปกติ)");
+  const q2Level = d.q2Score >= 1 ? " (พบข้อบ่งชี้)" : " (ปกติ)";
+  const q9Level = d.q9Score >= 19 ? " (ระดับรุนแรงมาก)" : (d.q9Score >= 13 ? " (ระดับรุนแรง)" : (d.q9Score >= 7 ? " (ปานกลาง)" : " (ปกติ)"));
+  const q8Level = d.q8Score >= 17 ? " (ระดับรุนแรงมาก)" : (d.q8Score >= 9 ? " (ปานกลาง)" : " (เล็กน้อย)");
+
+  // สัญญาณพฤติกรรมใบหน้า AI
+  let aiSignals = "";
+  if (d.cameraUsed) {
+    aiSignals =
+      "📷 ดัชนีพฤติกรรม (กล้อง AI): " + behScore + "/100\n" +
+      "⚠️ สัญญาณที่ระบบพบ:\n" +
+      " - คิ้วขมวดสะสม (AU4 Burst): " + (d.behaviorFlags && d.behaviorFlags.au4High ? "พบความตึงเครียดสูง" : "ปกติ") + "\n" +
+      " - การแสดงออกทางอารมณ์: " + (d.behaviorFlags && d.behaviorFlags.flatAffect ? "ไม่มีรอยยิ้มตลอดการทำ (Flat Affect)" : "ปกติ") + "\n" +
+      " - อัตราการกะพริบตา/การละสายตา: " + (d.behaviorFlags && d.behaviorFlags.eyeFatigue ? "พบลักษณะอ่อนล้า" : "ปกติ") + "\n";
+  } else {
+    aiSignals = "📷 ดัชนีพฤติกรรม (กล้อง AI): ไม่ได้เปิดกล้อง\n";
+  }
 
   const text =
-    icon + " [แจ้งเตือนระบบดูแลใจ วพอ.พอ.]\n" +
-    "━━━━━━━━━━━━━━━━━━\n" +
-    "👤 นักเรียน/ผู้ตรวจ: " + nameStr + " (ID: " + d.studentId + ")\n" +
-    "📊 ระดับความเสี่ยง: " + risk.level + " (" + (risk.reason || "-") + ")\n" +
-    "⏱️ SLA ติดตาม: " + slaText + "\n" +
-    "━━━━━━━━━━━━━━━━━━\n" +
-    "📋 ผลคะแนนประเมิน:\n" +
-    " • ST-5: " + (d.st5Score !== null ? d.st5Score : "-") + "/15\n" +
-    " • 2Q: " + (d.q2Score !== null ? d.q2Score : "-") + "/2 | 9Q: " + (d.q9Score !== null ? d.q9Score : "-") + "/27\n" +
-    " • 8Q: " + (d.q8Score !== null ? d.q8Score : "-") + "\n" +
-    " • 📷 ดัชนีกล้อง AI: " + behVal + "\n" +
+    icon + " [แจ้งเตือนด่วนดัชนีเฝ้าระวังล่าสุด]\n" +
+    "ระบบดูแลใจ วพอ.พอ.\n" +
+    "------------------------------------\n" +
+    "👤 รหัสนักเรียน/ชื่อ: " + d.studentId + " (" + nameStr + ")\n" +
+    "📊 ระดับความเสี่ยง: " + icon + " " + slaText + "\n" +
+    "📝 รายละเอียดผลประเมิน:\n" +
+    " • ST-5 (ความเครียด): " + (d.st5Score !== null ? d.st5Score : "-") + "/15 คะแนน" + st5Level + "\n" +
+    " • 2Q (คัดกรองซึมเศร้า): " + (d.q2Score !== null ? d.q2Score : "-") + "/2 คะแนน" + q2Level + "\n" +
+    " • 9Q (ประเมินซึมเศร้า): " + (d.q9Score !== null ? d.q9Score : "-") + "/27 คะแนน" + q9Level + "\n" +
+    " • 8Q (เสี่ยงทำร้ายตนเอง): " + (d.q8Score !== null ? d.q8Score : "-") + "/52 คะแนน" + q8Level + "\n" +
+    aiSignals +
     (d.conflictFlag ? "⚠️ สัญญาณขัดแย้ง: ตอบปกติแต่พฤติกรรมกล้องบ่งชี้ความตึงเครียด\n" : "") +
-    "━━━━━━━━━━━━━━━━━━\n" +
+    "------------------------------------\n" +
+    "🏥 สถานที่ส่งต่อ: รพ.ภูมิพลอดุลยเดช พอ. / รพ.กองบิน\n" +
     "🆔 รหัสงาน (Alert ID): " + alertId + "\n" +
     "📁 บันทึกข้อมูลลง Excel/Google Sheet เรียบร้อยแล้ว\n" +
     "👉 โปรดเปิด Dashboard เพื่อรับเรื่องและประสานการดูแล";
 
+  // ส่งแจ้งเตือนหลัก
   const res = sendAlert(text, risk.level);
 
-  // ส่งแจ้งเตือนกลับไปยัง LINE ของผู้ประเมินโดยตรง (ถ้าทำผ่าน LINE LIFF)
-  if (d.lineUserId) {
-    const props = PropertiesService.getScriptProperties();
-    const lineToken = props.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
-    if (lineToken) {
-      const userFeedback =
-        "💚 [ระบบดูแลใจ วพอ.พอ.]\n" +
-        "บันทึกผลการประเมินของคุณเรียบร้อยแล้ว\n" +
-        "ระดับการดูแล: " + risk.level + "\n" +
-        (risk.level === "RED" || risk.level === "ORANGE"
-          ? "มีอาจารย์ผู้ดูแลรับเรื่องแล้ว และพร้อมรับฟังเสมอเมื่อคุณต้องการ 🤝"
-          : "ขอบคุณที่แวะมาเช็คสุขภาพใจ ขอให้เป็นวันที่ดีนะ 🌿");
-      pushLineMessage(lineToken, d.lineUserId, userFeedback);
-    }
-  }
-
-  // ถ้ามีภาพถ่ายใบหน้าขณะประเมิน (กรณีเฝ้าระวัง) -> ส่งภาพเข้า Telegram ทันทีแบบ Real-Time
+  // ถ้ามีภาพถ่ายใบหน้าขณะประเมิน -> ส่งภาพพร้อมแคปชันละเอียดเข้า Telegram Real-Time
   if (d.faceSnapshot && String(d.faceSnapshot).indexOf("data:image") === 0) {
     try {
       const base64Data = String(d.faceSnapshot).split(",")[1];
       const bytes = Utilities.base64Decode(base64Data);
       const photoBlob = Utilities.newBlob(bytes, "image/jpeg", "snapshot_" + d.studentId + ".jpg");
-      const caption = "📸 [ภาพถ่ายขณะประเมิน - ระบบดูแลใจ]\n" +
-        "👤 " + nameStr + " (ID: " + d.studentId + ")\n" +
-        "📊 ระดับ: " + risk.level + " | 📷 ดัชนีกล้อง: " + behVal + "\n" +
-        (d.conflictFlag ? "⚠️ สัญญาณขัดแย้งคำตอบ-พฤติกรรม\n" : "") +
-        "🆔 " + alertId;
-      pushTelegramPhoto(photoBlob, caption);
+      pushTelegramPhoto(photoBlob, text);
     } catch (err) {
       logError("notifyTeachers.photo", err, alertId);
     }
