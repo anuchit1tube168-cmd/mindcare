@@ -619,13 +619,9 @@ const liffState = {
  * ลำดับ: ตรวจ SDK → init → getProfile → ผูกรหัสนักเรียนกับ backend
  */
 async function initLiff() {
-  // ไม่ตั้งค่า LIFF_ID = ไม่ใช้ LIFF
-  // ไม่ตั้ง liffState.studentId ที่นี่ เพราะจะทับรหัสที่ส่งมาทาง ?sid=
-  // ให้ activeStudentId() ไป fallback ตามลำดับ: sid > STUDENT_ID เอง
   if (!CONFIG.LIFF_ID) return;
-  // SDK โหลดไม่สำเร็จ (เน็ตมีปัญหา/ถูกบล็อก) — ยังทำแบบประเมินได้ด้วย ?sid=
   if (typeof liff === "undefined") {
-    console.warn("LIFF SDK ไม่ถูกโหลด — ใช้รหัสจาก ?sid= แทน");
+    console.warn("LIFF SDK ไม่ถูกโหลด — เข้าใช้งานผ่านเบราว์เซอร์ปกติ");
     return;
   }
   try {
@@ -633,11 +629,12 @@ async function initLiff() {
     liffState.ready = true;
     liffState.inClient = liff.isInClient();
 
-    // เปิดในเบราว์เซอร์ภายนอกและยังไม่ล็อกอิน → ชวนล็อกอิน LINE
+    // ถ้าเปิดผ่านลิงก์ LIFF บน External Browser แล้วยังไม่ได้ login -> สั่ง login ทันที
     if (!liff.isLoggedIn()) {
-      // ไม่ auto-login ทันทีเพื่อไม่ให้ผู้ใช้ตกใจ — ให้เริ่มทำก่อน
-      // ระบบจริงอาจเปิด withLoginOnExternalBrowser: true ใน init ได้
-      liffState.studentId = CONFIG.STUDENT_ID;
+      if (window.location.search.includes("liff.state") || window.location.href.includes("liff.line.me")) {
+        liff.login();
+        return;
+      }
       return;
     }
 
@@ -649,7 +646,6 @@ async function initLiff() {
     await resolveStudentId();
   } catch (err) {
     console.warn("LIFF init/profile ล้มเหลว:", err);
-    liffState.studentId = CONFIG.STUDENT_ID; // ยังทำแบบประเมินต่อได้
   }
 }
 
@@ -658,13 +654,11 @@ async function initLiff() {
  * ถ้ายังไม่เคยผูก → ตั้ง needBinding เพื่อให้หน้าจอถามรหัสนักเรียน
  */
 async function resolveStudentId() {
-  if (!CONFIG.GAS_ENDPOINT || !liffState.userId) {
-    liffState.studentId = CONFIG.STUDENT_ID;
-    return;
-  }
+  if (!CONFIG.GAS_ENDPOINT || !liffState.userId) return;
   try {
     const res = await fetch(CONFIG.GAS_ENDPOINT, {
       method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: "resolveStudent", lineUserId: liffState.userId }),
     });
     const data = await res.json();
@@ -675,7 +669,6 @@ async function resolveStudentId() {
     }
   } catch (err) {
     console.warn("resolveStudent ล้มเหลว:", err);
-    liffState.studentId = CONFIG.STUDENT_ID;
   }
 }
 
