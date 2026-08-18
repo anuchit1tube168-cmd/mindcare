@@ -316,6 +316,22 @@ function notifyTeachers(alertId, d, risk) {
 
   const res = sendAlert(text, risk.level);
 
+  // ส่งแจ้งเตือนกลับไปยัง LINE ของผู้ประเมินโดยตรง (ถ้าทำผ่าน LINE LIFF)
+  if (d.lineUserId) {
+    const props = PropertiesService.getScriptProperties();
+    const lineToken = props.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+    if (lineToken) {
+      const userFeedback =
+        "💚 [ระบบดูแลใจ วพอ.พอ.]\n" +
+        "บันทึกผลการประเมินของคุณเรียบร้อยแล้ว\n" +
+        "ระดับการดูแล: " + risk.level + "\n" +
+        (risk.level === "RED" || risk.level === "ORANGE"
+          ? "มีอาจารย์ผู้ดูแลรับเรื่องแล้ว และพร้อมรับฟังเสมอเมื่อคุณต้องการ 🤝"
+          : "ขอบคุณที่แวะมาเช็คสุขภาพใจ ขอให้เป็นวันที่ดีนะ 🌿");
+      pushLineMessage(lineToken, d.lineUserId, userFeedback);
+    }
+  }
+
   // ถ้ามีภาพถ่ายใบหน้าขณะประเมิน (กรณีเฝ้าระวัง) -> ส่งภาพเข้า Telegram ทันทีแบบ Real-Time
   if (d.faceSnapshot && String(d.faceSnapshot).indexOf("data:image") === 0) {
     try {
