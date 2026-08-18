@@ -273,8 +273,8 @@
 
   /* ---------- กล้อง preview + แถบปุ่มควบคุมขยับ ---------- */
   #cam-wrap {
-    position: fixed; right: 14px; bottom: 14px; z-index: 999;
-    width: 92px; height: 92px; border-radius: 50%;
+    position: fixed; right: 14px; top: 18px; z-index: 999;
+    width: 82px; height: 82px; border-radius: 50%;
     display: none; align-items: center; justify-content: center;
     touch-action: none; user-select: none; cursor: grab;
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
@@ -282,13 +282,13 @@
   }
   #cam-wrap:active { cursor: grabbing; }
   #cam-wrap.on { display: flex; }
-  #cam-wrap.size-large { width: 140px; height: 140px; border-radius: 20px; }
+  #cam-wrap.size-large { width: 130px; height: 130px; border-radius: 20px; }
   #cam-wrap.size-large #cam-video { border-radius: 18px; }
   #cam-wrap.size-large #cam-ring { border-radius: 24px; }
-  #cam-wrap.minimized { width: 48px; height: 48px; }
+  #cam-wrap.minimized { width: 44px; height: 44px; }
 
   #cam-controls {
-    position: absolute; top: -38px; left: 50%; transform: translateX(-50%);
+    position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%);
     display: none; gap: 6px; background: rgba(14,43,28,0.92);
     border: 1px solid var(--glass-border); padding: 4px 8px; border-radius: 20px;
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -314,8 +314,8 @@
   #cam-status { position: absolute; bottom: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--forest-deep); background: var(--cream-dim); pointer-events: none; }
   #cam-status.tracking { background: var(--ok); }
   #cam-label {
-    position: fixed; right: 14px; bottom: 110px; z-index: 998;
-    font-size: 10.5px; color: var(--cream-dim); display: none; pointer-events: none;
+    position: fixed; right: 14px; top: 108px; z-index: 998;
+    font-size: 10px; color: var(--cream-dim); display: none; pointer-events: none;
     background: rgba(14,43,28,0.88); padding: 3px 8px; border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
@@ -1211,12 +1211,12 @@ function stopCamera() {
   const video = document.getElementById("cam-video");
   if (!wrap) return;
 
-  // 1. ปุ่มย้ายมุม 4 ทิศทาง (ขวาล่าง -> ซ้ายล่าง -> ซ้ายบน -> ขวาบน -> ขวาล่าง)
+  // 1. ปุ่มย้ายมุม 4 ทิศทาง (ขวาบน -> ซ้ายบน -> ซ้ายล่าง -> ขวาล่าง -> ขวาบน)
   const corners = [
-    { right: "14px", bottom: "14px", left: "auto", top: "auto" },
-    { left: "14px", bottom: "14px", right: "auto", top: "auto" },
-    { left: "14px", top: "14px", right: "auto", bottom: "auto" },
-    { right: "14px", top: "14px", left: "auto", bottom: "auto" },
+    { right: "14px", top: "18px", left: "auto", bottom: "auto" },
+    { left: "14px", top: "18px", right: "auto", bottom: "auto" },
+    { left: "14px", bottom: "80px", right: "auto", top: "auto" },
+    { right: "14px", bottom: "80px", left: "auto", top: "auto" },
   ];
   let cornerIdx = 0;
   btnPos?.addEventListener("click", (e) => {
@@ -1229,8 +1229,10 @@ function stopCamera() {
     wrap.style.bottom = c.bottom;
     const label = document.getElementById("cam-label");
     if (label) {
-      label.style.left = c.left; label.style.top = c.top !== "auto" ? "120px" : "auto";
-      label.style.right = c.right; label.style.bottom = c.bottom !== "auto" ? "110px" : "auto";
+      label.style.left = c.left;
+      label.style.right = c.right;
+      label.style.top = c.top !== "auto" ? "108px" : "auto";
+      label.style.bottom = c.bottom !== "auto" ? "170px" : "auto";
     }
   });
 
