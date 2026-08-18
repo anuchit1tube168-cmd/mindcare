@@ -1475,9 +1475,12 @@ async function submitResultOnce() {
   try {
     const res = await fetch(CONFIG.GAS_ENDPOINT, {
       method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
+    const json = await res.json();
+    console.log("Submit success:", json);
     showToast("บันทึกผลเรียบร้อยแล้ว มีคนดูแลข้อมูลของคุณอยู่นะ");
   } catch (err) {
     console.warn("submit failed:", err);
