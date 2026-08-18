@@ -291,22 +291,28 @@ function createAlert(assessmentId, d, risk) {
 }
 
 function notifyTeachers(alertId, d, risk) {
-  const header = risk.level === "RED"
-    ? "🔴 [ด่วนที่สุด] ต้องติดต่อภายใน 1 ชั่วโมง"
-    : "🟠 [สำคัญ] ต้องติดต่อภายใน 24 ชั่วโมง (หรือเฝ้าระวัง)";
-
-  const nameStr = d.displayName ? " (" + d.displayName + ")" : "";
-  const behStr = (d.behaviorIndex !== null && d.behaviorIndex !== undefined) ? ("\n📷 ดัชนีพฤติกรรม (กล้อง): " + d.behaviorIndex + "/100") : "";
-  const confStr = d.conflictFlag ? "\n⚠️ สัญญาณขัดแย้ง: ตอบปกติแต่พฤติกรรมกล้องสูง" : "";
+  const icon = risk.level === "RED" ? "🚨🔴" : (risk.level === "ORANGE" ? "⚠️🟠" : "🟡");
+  const slaText = risk.level === "RED" ? "ติดต่อด่วนที่สุด ภายใน 1 ชม." : (risk.level === "ORANGE" ? "ติดต่อภายใน 24 ชม." : "เฝ้าระวัง/ติดตาม");
+  const nameStr = d.displayName ? d.displayName : ("รหัส " + d.studentId);
+  const behVal = (d.behaviorIndex !== null && d.behaviorIndex !== undefined) ? (d.behaviorIndex + "/100") : "ไม่ได้เปิดกล้อง";
 
   const text =
-    header + "\n" +
-    "ระบบดูแลใจ วพอ.พอ.\n" +
-    "รหัสนักเรียน/ชื่อ: " + d.studentId + nameStr + "\n" +
-    "ระดับ: " + risk.level + "\n" +
-    "รหัสงาน: " + alertId +
-    behStr + confStr + "\n" +
-    "โปรดเปิด dashboard เพื่อดูรายละเอียดและกดรับเรื่อง";
+    icon + " [แจ้งเตือนระบบดูแลใจ วพอ.พอ.]\n" +
+    "━━━━━━━━━━━━━━━━━━\n" +
+    "👤 นักเรียน/ผู้ตรวจ: " + nameStr + " (ID: " + d.studentId + ")\n" +
+    "📊 ระดับความเสี่ยง: " + risk.level + " (" + (risk.reason || "-") + ")\n" +
+    "⏱️ SLA ติดตาม: " + slaText + "\n" +
+    "━━━━━━━━━━━━━━━━━━\n" +
+    "📋 ผลคะแนนประเมิน:\n" +
+    " • ST-5: " + (d.st5Score !== null ? d.st5Score : "-") + "/15\n" +
+    " • 2Q: " + (d.q2Score !== null ? d.q2Score : "-") + "/2 | 9Q: " + (d.q9Score !== null ? d.q9Score : "-") + "/27\n" +
+    " • 8Q: " + (d.q8Score !== null ? d.q8Score : "-") + "\n" +
+    " • 📷 ดัชนีกล้อง AI: " + behVal + "\n" +
+    (d.conflictFlag ? "⚠️ สัญญาณขัดแย้ง: ตอบปกติแต่พฤติกรรมกล้องบ่งชี้ความตึงเครียด\n" : "") +
+    "━━━━━━━━━━━━━━━━━━\n" +
+    "🆔 รหัสงาน (Alert ID): " + alertId + "\n" +
+    "📁 บันทึกข้อมูลลง Excel/Google Sheet เรียบร้อยแล้ว\n" +
+    "👉 โปรดเปิด Dashboard เพื่อรับเรื่องและประสานการดูแล";
 
   const res = sendAlert(text, risk.level);
 
@@ -316,10 +322,11 @@ function notifyTeachers(alertId, d, risk) {
       const base64Data = String(d.faceSnapshot).split(",")[1];
       const bytes = Utilities.base64Decode(base64Data);
       const photoBlob = Utilities.newBlob(bytes, "image/jpeg", "snapshot_" + d.studentId + ".jpg");
-      const caption = "📸 [ภาพถ่ายขณะประเมิน - กรณีเฝ้าระวัง]\n" +
-        "รหัส/ชื่อ: " + d.studentId + nameStr + "\n" +
-        "ระดับ: " + risk.level + " | ดัชนีกล้อง: " + (d.behaviorIndex !== null ? d.behaviorIndex : "-") + "/100" +
-        (d.conflictFlag ? "\n⚠️ สัญญาณขัดแย้งคำตอบ-พฤติกรรม" : "");
+      const caption = "📸 [ภาพถ่ายขณะประเมิน - ระบบดูแลใจ]\n" +
+        "👤 " + nameStr + " (ID: " + d.studentId + ")\n" +
+        "📊 ระดับ: " + risk.level + " | 📷 ดัชนีกล้อง: " + behVal + "\n" +
+        (d.conflictFlag ? "⚠️ สัญญาณขัดแย้งคำตอบ-พฤติกรรม\n" : "") +
+        "🆔 " + alertId;
       pushTelegramPhoto(photoBlob, caption);
     } catch (err) {
       logError("notifyTeachers.photo", err, alertId);
