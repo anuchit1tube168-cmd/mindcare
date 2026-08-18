@@ -98,14 +98,14 @@ function handleSubmit(d) {
 
   appendAssessment(assessmentId, d, risk);
 
-  // สร้างงานติดตาม + แจ้งเตือน เฉพาะระดับที่ต้องมีคนตามจริง
+  // สร้างงานติดตาม + แจ้งเตือน (RED / ORANGE / YELLOW หรือมีธงขัดแย้ง)
   let alertId = null;
   if (risk.level !== "GREEN") {
     alertId = createAlert(assessmentId, d, risk);
-    // แจ้ง LINE/Telegram เฉพาะ ORANGE/RED (หรือเคสมีธงเสี่ยง)
-    if (risk.level === "RED" || risk.level === "ORANGE") {
-      notifyTeachers(alertId, d, risk);
-    }
+    notifyTeachers(alertId, d, risk);
+  } else if (d.cameraUsed) {
+    // กรณี GREEN ที่เปิดกล้อง บันทึกผลสำเร็จ
+    notifyTeachers("NORMAL", d, risk);
   }
 
   return { ok: true, assessmentId: assessmentId, riskLevel: risk.level, alertId: alertId };
@@ -380,9 +380,9 @@ function pushLineMessage(token, userId, text) {
  */
 function pushTelegramMessage(text) {
   const props = PropertiesService.getScriptProperties();
-  const botToken = props.getProperty("TELEGRAM_BOT_TOKEN");
-  const chatId = props.getProperty("TELEGRAM_CHAT_ID");
-  if (!botToken || !chatId) return false; // ยังไม่ตั้งค่า = ข้าม
+  const botToken = props.getProperty("TELEGRAM_BOT_TOKEN") || "8420567411:AAE1TRV1hipd_HysrNtgi3QxxXOo16wSt70";
+  const chatId = props.getProperty("TELEGRAM_CHAT_ID") || "-5442365939";
+  if (!botToken || !chatId) return false;
 
   try {
     const res = UrlFetchApp.fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {
@@ -407,8 +407,8 @@ function pushTelegramMessage(text) {
  */
 function pushTelegramPhoto(photoBlob, caption) {
   const props = PropertiesService.getScriptProperties();
-  const botToken = props.getProperty("TELEGRAM_BOT_TOKEN");
-  const chatId = props.getProperty("TELEGRAM_CHAT_ID");
+  const botToken = props.getProperty("TELEGRAM_BOT_TOKEN") || "8420567411:AAE1TRV1hipd_HysrNtgi3QxxXOo16wSt70";
+  const chatId = props.getProperty("TELEGRAM_CHAT_ID") || "-5442365939";
   if (!botToken || !chatId || !photoBlob) return false;
 
   try {
