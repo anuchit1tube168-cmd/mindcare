@@ -44,7 +44,14 @@ function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    const data = JSON.parse(e.postData.contents);
+    const postBody = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
+    const data = JSON.parse(postBody);
+
+    // ---- 1. รับข้อความและคำสั่งจาก Telegram Webhook (พิมพ์คำสั่งในกลุ่มแล้วบอทตอบทันที) ----
+    if (data.message || data.callback_query) {
+      handleTelegramWebhook(data);
+      return output({ ok: true });
+    }
 
     if (data.action === "submitAssessment") {
       return output(handleSubmit(data));
@@ -80,11 +87,205 @@ function doPost(e) {
   }
 }
 
+/**
+ * จัดการคำสั่งและข้อความที่พิมพ์ใน Telegram (@AI5STSMARTbot)
+ * รองรับ: /missing, /check, /summary, หรือพิมพ์ "ปี 1", "ปี 2", "ขาด", รหัสนักเรียน 7 หลัก
+ */
+function handleTelegramWebhook(update) {
+  try {
+    const msg = update.message || (update.callback_query && update.callback_query.message);
+    if (!msg) return;
+    const chatId = msg.chat.id;
+    const text = String(msg.text || (update.callback_query && update.callback_query.data) || "").trim();
+
+    if (!text) return;
+
+    const lower = text.toLowerCase();
+    const apiUrl = ScriptApp.getService().getUrl();
+    const sheetUrl = "https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit";
+
+    // 1. คำสั่งตรวจสอบรายชื่อคนที่ยังไม่ทำ (/missing, /check, "ขาด", "ยังไม่ทำ", "เช็ค")
+    if (lower.indexOf("/missing") === 0 || lower.indexOf("/check") === 0 || lower.indexOf("ขาด") !== -1 || lower.indexOf("ยังไม่ทำ") !== -1 || lower.indexOf("เช็ค") !== -1) {
+      let targetYear = "";
+      if (text.indexOf("1") !== -1 || text.indexOf("69") !== -1) targetYear = "69";
+      else if (text.indexOf("2") !== -1 || text.indexOf("68") !== -1) targetYear = "68";
+      else if (text.indexOf("3") !== -1 || text.indexOf("67") !== -1) targetYear = "67";
+      else if (text.indexOf("4") !== -1 || text.indexOf("66") !== -1) targetYear = "66";
+
+      const missingResult = checkMissingStudents(targetYear);
+      
+      let reply = "📋 [ตรวจสอบสถานะการทำแบบประเมิน วพอ.พอ.]\n" +
+        "------------------------------------\n" +
+        "• ประเมินแล้ว: " + missingResult.submittedCount + " คน\n" +
+        "• ยังไม่ทำ: " + missingResult.missingCount + " คน\n" +
+        "------------------------------------\n";
+
+      if (missingResult.missingList.length > 0) {
+        reply += "⚠️ รายชื่อผู้ที่ยังไม่ทำ" + (targetYear ? (" (รุ่น " + targetYear + ")") : "") + ":\n";
+        missingResult.missingList.slice(0, 20).forEach(function(s, idx) {
+          reply += (idx + 1) + ". " + s.id + " " + s.name + " (" + s.year + ")\n";
+        });
+        if (missingResult.missingList.length > 20) {
+          reply += "... และอีก " + (missingResult.missingList.length - 20) + " คน (ดูทั้งหมดในตาราง)\n";
+        }
+      } else {
+        reply += "🎉 ยอดเยี่ยมมาก! ทุกคนทำแบบประเมินครบถ้วน 100% แล้วครับ";
+      }
+
+      const buttons = {
+        inline_keyboard: [
+          [
+            { text: "📥 โหลดรายชื่อคนที่ยังไม่ทำ (CSV)", url: apiUrl + "?report=missing&year=" + targetYear }
+          ],
+          [
+            { text: "📊 เปิด Google Sheet", url: sheetUrl }
+          ]
+        ]
+      };
+
+      pushTelegramMessage(reply, buttons);
+      return;
+    }
+
+    // 2. คำสั่งสรุปภาพรวม (/summary, "สรุป", "ภาพรวม")
+    if (lower.indexOf("/summary") === 0 || lower.indexOf("สรุป") !== -1 || lower.indexOf("ภาพรวม") !== -1) {
+      const rep = buildWatchReport(7);
+      const sumText = "📊 [รายงานสรุปภาพรวมสุขภาพใจ 7 วันล่าสุด]\n" +
+        "ระบบดูแลใจ วพอ.พอ.\n" +
+        "------------------------------------\n" +
+        "• ทำแบบประเมินทั้งหมด: " + rep.total + " ครั้ง\n" +
+        "🔴 เสี่ยงสูงสุด (RED): " + rep.byRisk.RED + " คน\n" +
+        "🟠 สำคัญ (ORANGE): " + rep.byRisk.ORANGE + " คน\n" +
+        "🟡 ควรชวนคุย (YELLOW): " + rep.byRisk.YELLOW + " คน\n" +
+        "🟢 ปกติ (GREEN): " + rep.byRisk.GREEN + " คน\n" +
+        "📷 สัญญาณขัดแย้งกล้อง AI: " + rep.cameraConflicts + " ครั้ง\n" +
+        "------------------------------------\n" +
+        "👉 คลิกปุ่มด้านล่างเพื่อดาวน์โหลดเอกสารรายงาน:";
+
+      const sumButtons = {
+        inline_keyboard: [
+          [
+            { text: "📥 โหลดรายงาน 🔴 RED", url: apiUrl + "?report=downloadReport&level=RED" },
+            { text: "📥 โหลดรายงาน 🟠 ORANGE", url: apiUrl + "?report=downloadReport&level=ORANGE" }
+          ],
+          [
+            { text: "📥 โหลดรายงาน 🟡 YELLOW", url: apiUrl + "?report=downloadReport&level=YELLOW" },
+            { text: "📥 โหลดรายงานทั้งหมด (CSV)", url: apiUrl + "?report=downloadReport&days=7" }
+          ],
+          [
+            { text: "📊 เปิด Google Sheet", url: sheetUrl }
+          ]
+        ]
+      };
+
+      pushTelegramMessage(sumText, sumButtons);
+      return;
+    }
+
+    // 3. ถ้าพิมพ์รหัสนักเรียน 7 หลักมาตรงๆ -> ดึงประวัติรายคนส่งกลับให้ทันที
+    if (/^\d{7}$/.test(text)) {
+      const studentId = text;
+      const logs = readTimelineLogs({ studentId: studentId });
+      const roster = rosterMap();
+      const info = roster[studentId] || {};
+      
+      let sReply = "👤 [ข้อมูลประวัติสุขภาพใจรายบุคคล]\n" +
+        "------------------------------------\n" +
+        "• รหัสนักเรียน: " + studentId + "\n" +
+        "• ชื่อ-สกุล: " + (info.name || "ในทะเบียน") + " (" + (info.year || "-") + ")\n" +
+        "• ประวัติการประเมิน: ทำทั้งหมด " + logs.length + " ครั้ง\n";
+
+      if (logs.length > 0) {
+        const last = logs[0];
+        sReply += "• ครั้งล่าสุดเมื่อ: " + last.timestamp + "\n" +
+          "• ระดับความเสี่ยง: " + last.riskLevel + "\n" +
+          "• คะแนน: ST-5=" + last.st5Score + " | 2Q=" + last.q2Score + " | 9Q=" + last.q9Score + " | 8Q=" + last.q8Score + "\n" +
+          "• ผลประเมิน: " + last.reason + "\n";
+      } else {
+        sReply += "⚠️ ยังไม่มีประวัติการทำแบบประเมินในระบบ\n";
+      }
+
+      const sButtons = {
+        inline_keyboard: [
+          [
+            { text: "📥 โหลดไฟล์รายงานรายคน (CSV)", url: apiUrl + "?report=student&id=" + studentId }
+          ],
+          [
+            { text: "📊 เปิด Google Sheet", url: sheetUrl }
+          ]
+        ]
+      };
+
+      pushTelegramMessage(sReply, sButtons);
+      return;
+    }
+
+  } catch (err) {
+    logError("handleTelegramWebhook", err, "");
+  }
+}
+
+/**
+ * ตรวจสอบรายชื่อนักเรียนที่ยังไม่ได้ทำแบบประเมิน
+ */
+function checkMissingStudents(yearFilter) {
+  const rosterSheet = getSheet(SHEETS.ROSTER);
+  const rRows = rosterSheet.getDataRange().getValues();
+  const data = loadAssessments();
+
+  const submittedSet = {};
+  data.forEach(function (a) {
+    if (a.studentId) submittedSet[String(a.studentId).trim()] = true;
+  });
+
+  const missingList = [];
+  let submittedCount = 0;
+
+  for (let i = 1; i < rRows.length; i++) {
+    const sId = String(rRows[i][1] || rRows[i][0]).trim();
+    const name = rRows[i][2] || rRows[i][1] || "";
+    const year = rRows[i][3] || rRows[i][2] || "";
+
+    if (!sId || !/^\d{7}$/.test(sId)) continue;
+    if (yearFilter && sId.indexOf(yearFilter) !== 0 && String(year).indexOf(yearFilter) === -1) continue;
+
+    if (submittedSet[sId]) {
+      submittedCount++;
+    } else {
+      missingList.push({ id: sId, name: name, year: year });
+    }
+  }
+
+  return {
+    submittedCount: submittedCount,
+    missingCount: missingList.length,
+    missingList: missingList
+  };
+}
+
 function doGet(e) {
   const p = e ? e.parameter : {};
   const action = p.action || p.report;
 
-  // 1. อ่าน Log / ประวัติผลประเมินตามช่วงเวลา (Read Log Timeline) ในรูปแบบ JSON API
+  // 1. ดาวน์โหลดรายชื่อนักเรียนที่ยังไม่ได้ทำแบบประเมิน (Missing Students CSV)
+  if (action === "missing" || action === "downloadMissingReport") {
+    const filterYear = (p.year || "").trim();
+    const missingData = checkMissingStudents(filterYear);
+    const headers = ["ลำดับ", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "สถานะ"];
+    const rows = [headers];
+    missingData.missingList.forEach(function(s, idx) {
+      rows.push([idx + 1, s.id, '"' + s.name + '"', s.year || "-", "ยังไม่ทำแบบประเมิน"]);
+    });
+    const csvContent = "\uFEFF" + rows.map(function (r) { return r.join(","); }).join("\r\n");
+    const filename = "MindCare_Missing_Students_" + (filterYear ? ("Year" + filterYear) : "All") + "_" +
+      Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyyMMdd_HHmm") + ".csv";
+    
+    return ContentService.createTextOutput(csvContent)
+      .setMimeType(ContentService.MimeType.CSV)
+      .downloadAsFile(filename);
+  }
+
+  // 2. อ่าน Log / ประวัติผลประเมินตามช่วงเวลา (Read Log Timeline) ในรูปแบบ JSON API
   if (action === "readLog" || action === "timeline") {
     const logs = readTimelineLogs(p);
     return output({
