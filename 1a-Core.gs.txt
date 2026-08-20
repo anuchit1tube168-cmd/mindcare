@@ -320,6 +320,11 @@ function checkMissingStudents(yearFilter) {
     }
   }
 
+  // เรียงลำดับรหัสนักเรียนจากน้อยไปมาก
+  missingList.sort(function (a, b) {
+    return String(a.id).localeCompare(String(b.id));
+  });
+
   return {
     submittedCount: submittedCount,
     missingCount: missingList.length,
@@ -338,7 +343,7 @@ function doGet(e) {
     const headers = ["ลำดับ", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "สถานะ"];
     const rows = [headers];
     missingData.missingList.forEach(function(s, idx) {
-      rows.push([idx + 1, s.id, '"' + s.name + '"', s.year || "-", "ยังไม่ทำแบบประเมิน"]);
+      rows.push([idx + 1, '="' + String(s.id) + '"', '"' + s.name + '"', '"' + (s.year || "-") + '"', "ยังไม่ทำแบบประเมิน"]);
     });
     const csvContent = "\uFEFF" + rows.map(function (r) { return r.join(","); }).join("\r\n");
     const filename = "MindCare_Missing_Students_" + (filterYear ? ("Year" + filterYear) : "All") + "_" +
@@ -539,34 +544,36 @@ function generateReportCsv(filterLevel, filterYear, filterDays) {
     });
   }
 
-  // เรียงลำดับ: Timeline วันที่ล่าสุดก่อน (หากระดับต่างกันให้แสดงระดับรุนแรงก่อน)
+  // เรียงลำดับ: เรียงตามรหัสนักเรียนจากน้อยไปมาก (หรือหากเป็นรายงานชั้นปี ให้เรียงลำดับรหัส 7 หลักให้สวยงาม)
   filtered.sort(function (a, b) {
-    const d = riskRank(b.level) - riskRank(a.level);
-    return d !== 0 ? d : new Date(b.ts) - new Date(a.ts);
+    const idA = String(a.studentId || "").trim();
+    const idB = String(b.studentId || "").trim();
+    return idA.localeCompare(idB);
   });
 
   const headers = [
-    "ระดับความเสี่ยง", "รหัสประจำตัว", "ชื่อ-สกุล", "ชั้นปี/รุ่น", "วันเวลาประเมิน",
+    "ลำดับ", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ระดับความเสี่ยง",
     "ST-5 (เครียด)", "2Q (คัดกรอง)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)",
-    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "เหตุผลความเสี่ยง", "สถานะติดตามงาน"
+    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "วันเวลาประเมิน", "เหตุผลการแปลผล", "สถานะติดตามงาน"
   ];
 
   const rows = [headers];
-  filtered.forEach(function (a) {
+  filtered.forEach(function (a, idx) {
     const info = roster[a.studentId];
     const al = alerts[a.studentId];
     rows.push([
+      idx + 1,
+      '="' + String(a.studentId) + '"', // ใส่ ="6903946" เพื่อให้ Excel ไม่ตัดเลข 0 และไม่แปลงเป็น Scientific notation
+      '"' + (info && info.name ? info.name : (a.name || "-")) + '"',
+      '"' + (info && info.year ? info.year : "-") + '"',
       a.level,
-      a.studentId,
-      info && info.name ? info.name : (a.name || "-"),
-      info && info.year ? info.year : "-",
-      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
       a.st5 !== null && a.st5 !== undefined ? a.st5 : "-",
       a.q2 !== null && a.q2 !== undefined ? a.q2 : "-",
       a.q9 !== null && a.q9 !== undefined ? a.q9 : "-",
       a.q8 !== null && a.q8 !== undefined ? a.q8 : "-",
       a.camIndex !== null && a.camIndex !== undefined ? a.camIndex : "-",
       a.conflict ? "พบสัญญาณขัดแย้ง" : "ปกติ",
+      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
       '"' + String(a.reason || "").replace(/"/g, '""') + '"',
       al ? al.status : "-"
     ]);
