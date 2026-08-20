@@ -1199,20 +1199,56 @@ function evaluateRisk(d) {
 }
 
 /**
- * ผูก/ค้นหารหัสนักเรียนจาก LINE userId
+ * ผูก/ค้นหารหัสนักเรียนจาก LINE userId พร้อมบันทึกประวัติการเข้าชม (Visitor Log) ทันทีทุกครั้ง
  * ชีต Bindings: lineUserId | studentId | boundAt
- * ระบบจริง: การผูกครั้งแรกควรผ่านการยืนยันตัวตน (เช่น อาจารย์อนุมัติ
- * หรือกรอกรหัส+เลขบัตรตรงกับทะเบียน) — ที่นี่คืนเฉพาะที่ผูกไว้แล้ว
  */
 function handleResolveStudent(d) {
   if (!d.lineUserId) throw new Error("missing lineUserId");
   const sh = getSheet(SHEETS.BINDINGS);
   const rows = sh.getDataRange().getValues();
+  
+  let foundStudentId = null;
+  let rowIndex = -1;
+
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(d.lineUserId)) {
-      return { ok: true, studentId: rows[i][1] };
+    if (String(rows[i][0]).trim() === String(d.lineUserId).trim()) {
+      foundStudentId = rows[i][1];
+      rowIndex = i + 1;
+      break;
     }
   }
+
+  // ถ้าเคยมีอยู่แล้ว -> อัปเดตเวลาที่เข้าใช้งานล่าสุด (Last Active)
+  if (foundStudentId) {
+    sh.getRange(rowIndex, 3).setValue(new Date());
+    return { ok: true, studentId: foundStudentId };
+  }
+
+  // ถ้าเป็นผู้ใช้ LINE ใหม่ที่เพิ่งเข้าสู่ระบบ -> บันทึก LINE userId ทันที (ยังไม่ผูกรหัส)
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const currentRows = sh.getDataRange().getValues();
+    let exists = false;
+    for (let j = 1; j < currentRows.length; j++) {
+      if (String(currentRows[j][0]).trim() === String(d.lineUserId).trim()) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
+      sh.appendRow([
+        d.lineUserId,
+        d.displayName ? ("LINE: " + d.displayName) : "VISITOR",
+        new Date()
+      ]);
+    }
+  } catch (e) {
+    logError("handleResolveStudent.autoLog", e, d.lineUserId);
+  } finally {
+    lock.releaseLock();
+  }
+
   return { ok: true, studentId: null, needBinding: true };
 }
 
@@ -1325,7 +1361,7 @@ function appendAssessment(assessmentId, d, risk) {
   ]);
 
   // ซิงค์ LINE userId ลงในชีตทะเบียน (Roster) และชีต Bindings อัตโนมัติทันที
-  if (d.lineUserId && d.studentId && /^\d{7}$/.test(String(d.studentId).trim())) {
+  if (d.lineUserId && d.studentId) {
     try {
       syncLineUserIdToRoster(String(d.studentId).trim(), String(d.lineUserId).trim());
     } catch (err) {

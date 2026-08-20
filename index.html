@@ -664,7 +664,11 @@ async function resolveStudentId() {
     const res = await fetch(CONFIG.GAS_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "resolveStudent", lineUserId: liffState.userId }),
+      body: JSON.stringify({
+        action: "resolveStudent",
+        lineUserId: liffState.userId,
+        displayName: liffState.displayName || ""
+      }),
     });
     const data = await res.json();
     if (data.ok && data.studentId) {
