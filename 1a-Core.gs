@@ -673,7 +673,169 @@ function notifyStudentLine(d, risk) {
     "📥 ดาวน์โหลดเอกสารผลประเมินของน้อง:\n" +
     apiUrl + "?report=student&id=" + encodeURIComponent(d.studentId);
 
-  pushLineMessage(token, d.lineUserId, text);
+  pushLineFlexResult(token, d, risk);
+}
+
+/**
+ * ส่งผลประเมินส่วนตัวในรูปแบบ LINE Flex Message (การ์ดสวยงาม ทันสมัย พร้อมปุ่มกดดาวน์โหลด)
+ */
+function pushLineFlexResult(token, d, risk) {
+  if (!d.lineUserId || !token) return;
+
+  const isRed = risk.level === "RED";
+  const isOrange = risk.level === "ORANGE";
+  const isYellow = risk.level === "YELLOW";
+  
+  const headerBg = isRed ? "#D32F2F" : (isOrange ? "#E65100" : (isYellow ? "#F57F17" : "#1B4332"));
+  const riskTitle = isRed ? "🔴 ความเสี่ยงสูง (RED)" : (isOrange ? "🟠 ข้อบ่งชี้สำคัญ (ORANGE)" : (isYellow ? "🟡 ระดับเฝ้าระวัง (YELLOW)" : "🟢 สุขภาวะปกติ (GREEN)"));
+  const nameStr = d.displayName ? d.displayName : ("รหัส " + d.studentId);
+  const apiUrl = ScriptApp.getService().getUrl();
+  const reportUrl = apiUrl + "?report=student&id=" + encodeURIComponent(d.studentId);
+  const liffUrl = "https://liff.line.me/2010984231-Z7kbSIPp";
+
+  let adviceText = "";
+  if (isRed) {
+    adviceText = "ขอให้น้องรู้ว่าไม่ได้อยู่คนเดียว หากรู้สึกไม่ไหว โปรดติดต่ออาจารย์ผู้ดูแลทันที หรือโทรสายด่วน 1323 (ฟรี 24 ชม.)";
+  } else if (isOrange) {
+    adviceText = "ระบบพบสัญญาณความเครียด/ความกังวลค่อนข้างสูง อาจารย์พร้อมรับฟังและให้คำปรึกษา แนะนำให้นัดหมายพูดคุยกับอาจารย์นะครับ";
+  } else if (isYellow) {
+    adviceText = "ช่วงนี้อาจมีเรื่องตึงเครียดหรือเหนื่อยล้า แนะนำให้หาเวลาพักผ่อน หรือชวนคุยกับเพื่อนและอาจารย์ที่ปรึกษาได้เสมอนะครับ";
+  } else {
+    adviceText = "ผลประเมินอยู่ในเกณฑ์ปกติ มีสุขภาวะทางใจที่ดี หมั่นพักผ่อนและดูแลสุขภาพกายใจอย่างสม่ำเสมอนะครับ ✨";
+  }
+
+  const flexPayload = {
+    type: "flex",
+    altText: "🌸 ผลการประเมินสุขภาพใจ: " + risk.level + " (" + d.studentId + ")",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: headerBg,
+        paddingAll: "20px",
+        contents: [
+          { type: "text", text: "ระบบดูแลใจ วพอ.พอ.", color: "#FFFFFF", size: "xs", weight: "bold" },
+          { type: "text", text: "สรุปผลการประเมินสุขภาพใจ", color: "#FFFFFF", size: "lg", weight: "bold", margin: "xs" },
+          { type: "text", text: riskTitle, color: "#FFFFFF", size: "sm", margin: "sm", weight: "bold" }
+        ]
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: "รหัสนักเรียน", size: "xs", color: "#888888", flex: 2 },
+              { type: "text", text: String(d.studentId), size: "xs", weight: "bold", color: "#333333", flex: 4 }
+            ]
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: "ชื่อ-สกุล", size: "xs", color: "#888888", flex: 2 },
+              { type: "text", text: nameStr, size: "xs", weight: "bold", color: "#333333", flex: 4 }
+            ]
+          },
+          { type: "separator" },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "• ST-5 (ความเครียด)", size: "xs", color: "#555555", flex: 4 },
+                  { type: "text", text: (d.st5Score !== null ? d.st5Score : "-") + "/15", size: "xs", weight: "bold", align: "end", flex: 2 }
+                ]
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "• 2Q (คัดกรองซึมเศร้า)", size: "xs", color: "#555555", flex: 4 },
+                  { type: "text", text: (d.q2Score !== null ? d.q2Score : "-") + "/2", size: "xs", weight: "bold", align: "end", flex: 2 }
+                ]
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "• 9Q (ระดับซึมเศร้า)", size: "xs", color: "#555555", flex: 4 },
+                  { type: "text", text: (d.q9Score !== null && d.q9Score !== undefined && d.q9Score !== "" ? d.q9Score : "-") + "/27", size: "xs", weight: "bold", align: "end", flex: 2 }
+                ]
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "• 8Q (เสี่ยงทำร้ายตนเอง)", size: "xs", color: "#555555", flex: 4 },
+                  { type: "text", text: (d.q8Score !== null && d.q8Score !== undefined && d.q8Score !== "" ? d.q8Score : "-") + "/52", size: "xs", weight: "bold", align: "end", flex: 2 }
+                ]
+              }
+            ]
+          },
+          { type: "separator" },
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#F8F9FA",
+            cornerRadius: "md",
+            paddingAll: "10px",
+            contents: [
+              { type: "text", text: "คำแนะนำการดูแลใจ:", size: "xxs", color: "#888888", weight: "bold" },
+              { type: "text", text: adviceText, size: "xs", color: "#444444", wrap: true, margin: "xs" }
+            ]
+          }
+        ]
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            color: headerBg,
+            height: "sm",
+            action: { type: "uri", label: "📥 ดาวน์โหลดเอกสารผลประเมิน", uri: reportUrl }
+          },
+          {
+            type: "button",
+            style: "secondary",
+            height: "sm",
+            action: { type: "uri", label: "🌿 ทำแบบประเมินใหม่อีกครั้ง", uri: liffUrl }
+          }
+        ]
+      }
+    }
+  };
+
+  pushLineCustomMessage(token, d.lineUserId, flexPayload);
+}
+
+function pushLineCustomMessage(token, userId, messageObj) {
+  try {
+    const res = UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", {
+      method: "post",
+      contentType: "application/json",
+      headers: { Authorization: "Bearer " + token },
+      payload: JSON.stringify({ to: userId, messages: [messageObj] }),
+      muteHttpExceptions: true,
+    });
+    return res.getResponseCode() === 200;
+  } catch (err) {
+    logError("pushLineCustomMessage", err, userId);
+    return false;
+  }
 }
 
 /**
