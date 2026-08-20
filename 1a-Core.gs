@@ -147,7 +147,56 @@ function handleTelegramWebhook(update) {
       return;
     }
 
-    // 2. คำสั่งสรุปภาพรวม (/summary, "สรุป", "ภาพรวม")
+    // 2. คำสั่งดึงข้อมูลรายงานผลแยกรายชั้นปี (เช่น "ปี 1", "ปี 2", "ปี 3", "ปี 4", "/year1", "/year", "รายงานปี")
+    if (lower.indexOf("/year") === 0 || lower.indexOf("รายงานปี") !== -1 || (lower.indexOf("ปี") !== -1 && (text.indexOf("1") !== -1 || text.indexOf("2") !== -1 || text.indexOf("3") !== -1 || text.indexOf("4") !== -1))) {
+      let targetYear = "69";
+      let yearName = "ชั้นปีที่ 1 (รุ่น 69)";
+      if (text.indexOf("2") !== -1 || text.indexOf("68") !== -1) { targetYear = "68"; yearName = "ชั้นปีที่ 2 (รุ่น 68)"; }
+      else if (text.indexOf("3") !== -1 || text.indexOf("67") !== -1) { targetYear = "67"; yearName = "ชั้นปีที่ 3 (รุ่น 67)"; }
+      else if (text.indexOf("4") !== -1 || text.indexOf("66") !== -1) { targetYear = "66"; yearName = "ชั้นปีที่ 4 (รุ่น 66)"; }
+
+      const logs = readTimelineLogs({ year: targetYear });
+      const distinctStudents = {};
+      logs.forEach(function(l) { distinctStudents[l.studentId] = l; });
+      const studentCount = Object.keys(distinctStudents).length;
+
+      let yReply = "📑 [รายงานผลประเมินสุขภาพใจ: " + yearName + "]\n" +
+        "------------------------------------\n" +
+        "• จำนวนนักเรียนที่ประเมินแล้ว: " + studentCount + " คน (" + logs.length + " ครั้ง)\n" +
+        "------------------------------------\n";
+
+      if (logs.length > 0) {
+        yReply += "📋 รายชื่อและผลประเมินล่าสุด (ตัวอย่าง):\n";
+        Object.values(distinctStudents).slice(0, 15).forEach(function(s, idx) {
+          const riskIcon = s.riskLevel === "RED" ? "🔴" : (s.riskLevel === "ORANGE" ? "🟠" : (s.riskLevel === "YELLOW" ? "🟡" : "🟢"));
+          yReply += (idx + 1) + ". " + s.studentId + " " + s.displayName + " ➔ " + riskIcon + " " + s.riskLevel + " (ST5:" + s.st5Score + " 9Q:" + (s.q9Score || 0) + " 8Q:" + (s.q8Score || 0) + ")\n";
+        });
+        if (studentCount > 15) {
+          yReply += "... และอีก " + (studentCount - 15) + " คน (ดาวน์โหลดไฟล์เต็มได้ด้านล่าง)\n";
+        }
+      } else {
+        yReply += "⚠️ ยังไม่มีข้อมูลการประเมินในชั้นปีนี้\n";
+      }
+
+      const yButtons = {
+        inline_keyboard: [
+          [
+            { text: "📥 โหลดรายงานผล " + yearName + " (CSV)", url: apiUrl + "?report=downloadReport&year=" + targetYear }
+          ],
+          [
+            { text: "⚠️ ดูรายชื่อที่ยังไม่ทำ (" + yearName + ")", url: apiUrl + "?report=missing&year=" + targetYear }
+          ],
+          [
+            { text: "📊 เปิด Google Sheet", url: sheetUrl }
+          ]
+        ]
+      };
+
+      pushTelegramMessage(yReply, yButtons);
+      return;
+    }
+
+    // 3. คำสั่งสรุปภาพรวม (/summary, "สรุป", "ภาพรวม")
     if (lower.indexOf("/summary") === 0 || lower.indexOf("สรุป") !== -1 || lower.indexOf("ภาพรวม") !== -1) {
       const rep = buildWatchReport(7);
       const sumText = "📊 [รายงานสรุปภาพรวมสุขภาพใจ 7 วันล่าสุด]\n" +
