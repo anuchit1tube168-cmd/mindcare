@@ -344,6 +344,50 @@ function appendAssessment(assessmentId, d, risk) {
     sanitize(d.displayName || ""),                    // ชื่อที่แสดง (จากทะเบียน หรือกรอกเอง)
     sanitize(d.userType || "student"),                // student / staff / guest
   ]);
+
+  // ซิงค์ LINE userId ลงในชีตทะเบียน (Roster) และชีต Bindings อัตโนมัติทันที
+  if (d.lineUserId && d.studentId && /^\d{7}$/.test(String(d.studentId).trim())) {
+    try {
+      syncLineUserIdToRoster(String(d.studentId).trim(), String(d.lineUserId).trim());
+    } catch (err) {
+      logError("appendAssessment.syncRoster", err, d.studentId);
+    }
+  }
+}
+
+/**
+ * บันทึก LINE userId ลงในชีต Roster (คอลัมน์ 7: LINE userId) และ Bindings
+ */
+function syncLineUserIdToRoster(studentId, lineUserId) {
+  if (!studentId || !lineUserId) return;
+
+  // 1. บันทึกลงชีต Roster
+  const rosterSheet = getSheet(SHEETS.ROSTER);
+  const rRows = rosterSheet.getDataRange().getValues();
+  for (let i = 1; i < rRows.length; i++) {
+    if (String(rRows[i][1]).trim() === studentId || String(rRows[i][0]).trim() === studentId) {
+      // คอลัมน์ LINE userId ใน Roster คือคอลัมน์ 7 (G) หรือ 6 ขึ้นกับโครงสร้าง
+      const colIndex = rRows[0].indexOf("LINE userId") !== -1 ? (rRows[0].indexOf("LINE userId") + 1) : 7;
+      rosterSheet.getRange(i + 1, colIndex).setValue(lineUserId);
+      break;
+    }
+  }
+
+  // 2. บันทึกลงชีต Bindings (ป้องกันซ้ำ)
+  const bindSheet = getSheet(SHEETS.BINDINGS);
+  const bRows = bindSheet.getDataRange().getValues();
+  let found = false;
+  for (let j = 1; j < bRows.length; j++) {
+    if (String(bRows[j][0]).trim() === lineUserId) {
+      bindSheet.getRange(j + 1, 2).setValue(studentId);
+      bindSheet.getRange(j + 1, 3).setValue(new Date());
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    bindSheet.appendRow([lineUserId, studentId, new Date()]);
+  }
 }
 
 /* ==========================================================
