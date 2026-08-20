@@ -35,6 +35,14 @@ const SLA_HOURS = { RED: 1, ORANGE: 72, YELLOW: 168 };
 // ต้องเป็นโฟลเดอร์ที่บัญชีเจ้าของสคริปต์มีสิทธิ์เขียน
 const DRIVE_FOLDER_ID = "1cecXhoC2-JaKvEAQv-W3ohEmIOjFw-gt";
 
+// LINE Channel Access Token สำหรับส่ง LINE Flex Card สรุปผลให้นักเรียน
+const DEFAULT_LINE_CHANNEL_ACCESS_TOKEN = "vyXhnvU/stGL9mUrIPKB+30x6OwFuFsercCL0UwISHKcV+qn3VW7FYL1kTa8kgm/+GpjDU3s+F/DPaFJwyZK58Y7iNrNXidTBmbaJu7w5ReFAiBmFe+QJ6z6tytonZPqmtfuO9pSU8tnmfRTh2+uvwdB04t89/1O/w1cDnyilFU=";
+
+function getLineToken() {
+  const propToken = PropertiesService.getScriptProperties().getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  return propToken || DEFAULT_LINE_CHANNEL_ACCESS_TOKEN;
+}
+
 /* ==========================================================
  * Web App entry points
  * ========================================================== */
@@ -47,8 +55,14 @@ function doPost(e) {
     const postBody = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
     const data = JSON.parse(postBody);
 
+    // 0. ตั้งค่า LINE Token ผ่าน POST
+    if (data.action === "setToken" && data.token) {
+      PropertiesService.getScriptProperties().setProperty("LINE_CHANNEL_ACCESS_TOKEN", String(data.token).trim());
+      return output({ ok: true, message: "บันทึก LINE_CHANNEL_ACCESS_TOKEN เรียบร้อยแล้ว" });
+    }
+
     // ---- 1. รับข้อความและคำสั่งจาก Telegram Webhook (พิมพ์คำสั่งในกลุ่มแล้วบอทตอบทันที) ----
-    if (data.message || data.callback_query) {
+    if (data.message || data.callback_query || data.update_id) {
       handleTelegramWebhook(data);
       return output({ ok: true });
     }
@@ -145,7 +159,8 @@ function handleTelegramWebhook(update) {
             { text: "📥 โหลดรายงานผล " + yearName + " (CSV)", url: apiUrl + "?report=downloadReport&year=" + targetYear }
           ],
           [
-            { text: "⚠️ ดูรายชื่อที่ยังไม่ทำ (" + yearName + ")", url: apiUrl + "?report=missing&year=" + targetYear }
+            { text: "⚠️ ดูรายชื่อที่ยังไม่ทำ (" + yearName + ")", url: apiUrl + "?report=missing&year=" + targetYear },
+            { text: "📲 ส่ง LINE Flex แจ้งเตือน (" + yearName + ")", url: apiUrl + "?action=pushLineAll&year=" + targetYear }
           ],
           [
             { text: "📊 เปิด Google Sheet", url: sheetUrl }
@@ -154,6 +169,36 @@ function handleTelegramWebhook(update) {
       };
 
       pushTelegramMessage(yReply, yButtons);
+      return;
+    }
+
+    // 1.5 คำสั่งสั่งส่ง LINE Flex Message ทันทีผ่าน Telegram (/broadcast, /sendflex, "ส่งไลน์", "บรอดคาสต์")
+    if (lower.indexOf("/broadcast") === 0 || lower.indexOf("/sendflex") === 0 || lower.indexOf("/line") === 0 || lower.indexOf("ส่งไลน์") !== -1 || lower.indexOf("บรอดคาสต์") !== -1) {
+      let targetYear = "";
+      if (cleanText.indexOf("1") !== -1 || cleanText.indexOf("69") !== -1) targetYear = "69";
+      else if (cleanText.indexOf("2") !== -1 || cleanText.indexOf("68") !== -1) targetYear = "68";
+      else if (cleanText.indexOf("3") !== -1 || cleanText.indexOf("67") !== -1) targetYear = "67";
+      else if (cleanText.indexOf("4") !== -1 || cleanText.indexOf("66") !== -1) targetYear = "66";
+
+      const res = pushResultsToAllStudentsLine(targetYear);
+      let reply = "📲 [ผลการสั่งส่ง LINE Flex Message]\n" +
+        "ระบบดูแลใจ วิทยาลัยพยาบาลทหารอากาศ\n" +
+        "------------------------------------\n" +
+        (res.ok ? ("✅ " + res.message + "\n") : ("❌ เกิดข้อผิดพลาด: " + res.error + "\n")) +
+        (targetYear ? ("🎯 กลุ่มเป้าหมาย: ชั้นปีที่ระบุ (รุ่น " + targetYear + ")\n") : "🎯 กลุ่มเป้าหมาย: นักเรียนทุกคน\n") +
+        "• ส่งสำเร็จ: " + (res.sentCount || 0) + " คน\n" +
+        "• ยังไม่ผูก LINE ID: " + (res.noLineBindingCount || 0) + " คน\n" +
+        "------------------------------------";
+
+      const flexButtons = {
+        inline_keyboard: [
+          [
+            { text: "📊 เปิด Google Sheet", url: sheetUrl },
+            { text: "🌐 เปิดระบบดูแลใจ", url: webAppUrl }
+          ]
+        ]
+      };
+      pushTelegramMessage(reply, flexButtons);
       return;
     }
 
@@ -261,9 +306,10 @@ function handleTelegramWebhook(update) {
       const sButtons = {
         inline_keyboard: [
           [
-            { text: "📥 โหลดไฟล์รายงานรายคน (CSV)", url: apiUrl + "?report=student&id=" + studentId }
+            { text: "📲 ส่ง LINE Flex การ์ดให้นักเรียนคนนี้", url: apiUrl + "?action=pushStudent&id=" + studentId }
           ],
           [
+            { text: "📥 โหลดไฟล์รายงานรายคน (CSV)", url: apiUrl + "?report=student&id=" + studentId },
             { text: "📊 เปิด Google Sheet", url: sheetUrl }
           ]
         ]
@@ -417,6 +463,13 @@ function doGet(e) {
     return output(result);
   }
 
+  // 5.1 ส่งผลประเมินเฉพาะรายบุคคลที่อาจารย์ระบุไปยัง LINE ของนักเรียนคนนั้น
+  if (action === "pushStudent" || action === "sendStudentLine") {
+    const sId = (p.id || p.studentId || "").trim();
+    const result = pushSingleStudentLine(sId);
+    return output(result);
+  }
+
   // 6. หน้าเว็บช่วยกรอก/บันทึก LINE_CHANNEL_ACCESS_TOKEN ได้โดยตรงอย่างง่ายดาย
   if (action === "setToken" || action === "setupToken") {
     if (p.token) {
@@ -431,15 +484,40 @@ function doGet(e) {
     }
     return HtmlService.createHtmlOutput(
       '<body style="font-family:sans-serif; text-align:center; padding:40px; background:#F8FAFC;">' +
-      '<div style="max-width:500px; margin:0 auto; background:#fff; padding:30px; border-radius:12px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">' +
-      '<h2 style="color:#1E293B;">🔑 ตั้งค่า LINE Channel Access Token</h2>' +
-      '<p style="color:#64748B; font-size:14px;">วาง Token ที่คัดลอกมาจาก LINE Developers Console แล้วกดบันทึก</p>' +
-      '<form method="GET">' +
-      '<input type="hidden" name="action" value="setToken" />' +
-      '<textarea name="token" rows="6" style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #CBD5E1; border-radius:8px; font-family:monospace; font-size:12px;" placeholder="วาง Channel Access Token ที่นี่..." required></textarea>' +
-      '<button type="submit" style="margin-top:20px; width:100%; padding:12px; background:#059669; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:15px; cursor:pointer;">💾 บันทึก Token</button>' +
-      '</form>' +
+      '<div style="max-width:550px; margin:0 auto; background:#fff; padding:30px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); text-align:left;">' +
+      '<h2 style="color:#1E293B; margin-top:0; text-align:center;">🔑 ตั้งค่า LINE Channel Access Token</h2>' +
+      '<p style="color:#64748B; font-size:14px; text-align:center;">วาง Channel access token (long-lived) ที่ได้จากฟ้าใสลงในช่องด้านล่าง</p>' +
+      '<textarea id="tokenInput" rows="7" style="width:100%; box-sizing:border-box; padding:12px; border:1px solid #CBD5E1; border-radius:8px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="วาง Channel Access Token ที่นี่..."></textarea>' +
+      '<button id="saveBtn" onclick="saveToken()" style="margin-top:16px; width:100%; padding:14px; background:#059669; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">💾 บันทึก Token</button>' +
+      '<div id="resultMsg" style="display:none; margin-top:20px; padding:16px; border-radius:8px; text-align:center;"></div>' +
       '</div>' +
+      '<script>' +
+      'async function saveToken() {' +
+      '  const val = document.getElementById("tokenInput").value.trim();' +
+      '  if (!val) { alert("กรุณาวาง Token ก่อนกดบันทึกครับ"); return; }' +
+      '  const btn = document.getElementById("saveBtn");' +
+      '  const msg = document.getElementById("resultMsg");' +
+      '  btn.disabled = true; btn.innerText = "⏳ กำลังบันทึก...";' +
+      '  try {' +
+      '    const resp = await fetch(window.location.href.split("?")[0], {' +
+      '      method: "POST",' +
+      '      body: JSON.stringify({ action: "setToken", token: val })' +
+      '    });' +
+      '    const res = await resp.json();' +
+      '    if (res.ok) {' +
+      '      msg.style.display = "block";' +
+      '      msg.style.background = "#DCFCE7"; msg.style.color = "#166534";' +
+      '      msg.innerHTML = "<b>✅ บันทึกสำเร็จเรียบร้อยแล้ว!</b><br><br><a href=\'?action=pushLineAll\' style=\'display:inline-block; padding:10px 18px; background:#166534; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold;\'>📲 กดส่งผลเข้า LINE นักเรียนทุกคนทันที</a>";' +
+      '      btn.style.display = "none";' +
+      '    } else {' +
+      '      alert("เกิดข้อผิดพลาด: " + (res.error || "บันทึกไม่สำเร็จ"));' +
+      '      btn.disabled = false; btn.innerText = "💾 บันทึก Token";' +
+      '    }' +
+      '  } catch (err) {' +
+      '    window.location.href = window.location.href.split("?")[0] + "?action=setToken&token=" + encodeURIComponent(val);' +
+      '  }' +
+      '}' +
+      '</script>' +
       '</body>'
     );
   }
@@ -665,8 +743,7 @@ function handleSubmit(d) {
  */
 function notifyStudentLine(d, risk) {
   if (!d.lineUserId) return;
-  const props = PropertiesService.getScriptProperties();
-  const token = props.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  const token = getLineToken();
   if (!token) return;
 
   const icon = risk.level === "RED" ? "🔴" : (risk.level === "ORANGE" ? "🟠" : (risk.level === "YELLOW" ? "🟡" : "🟢"));
@@ -869,8 +946,7 @@ function pushLineCustomMessage(token, userId, messageObj) {
  * ส่งผลประเมินย้อนหลังกลับไปยัง LINE ID ของนักเรียนทุกคนที่ผูกบัญชีไว้
  */
 function pushResultsToAllStudentsLine(yearFilter) {
-  const props = PropertiesService.getScriptProperties();
-  const token = props.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  const token = getLineToken();
   if (!token) return { ok: false, error: "ไม่พบ LINE_CHANNEL_ACCESS_TOKEN" };
 
   const data = loadAssessments();
@@ -934,6 +1010,72 @@ function pushResultsToAllStudentsLine(yearFilter) {
     message: "ส่งข้อมูลผลประเมินไปยัง LINE ของนักเรียนเรียบร้อยแล้ว",
     sentCount: sentCount,
     noLineBindingCount: skippedCount
+  };
+}
+
+/**
+ * ส่งผลประเมินส่วนตัวไปยัง LINE ID ของนักเรียนรายคน (ที่อาจารย์เลือก)
+ */
+function pushSingleStudentLine(studentId) {
+  if (!studentId) return { ok: false, error: "กรุณาระบุรหัสนักเรียน" };
+  const token = getLineToken();
+  if (!token) return { ok: false, error: "ไม่พบ LINE_CHANNEL_ACCESS_TOKEN" };
+
+  const roster = rosterMap();
+  const bindSheet = getSheet(SHEETS.BINDINGS);
+  const bRows = bindSheet.getDataRange().getValues();
+
+  let lineUserId = null;
+  for (let i = 1; i < bRows.length; i++) {
+    if (String(bRows[i][1]).trim() === String(studentId).trim()) {
+      lineUserId = String(bRows[i][0]).trim();
+      break;
+    }
+  }
+
+  // หากไม่มีในชีต Bindings ให้ตรวจใน Roster
+  if (!lineUserId) {
+    const rSheet = getSheet(SHEETS.ROSTER);
+    const rRows = rSheet.getDataRange().getValues();
+    const colIdx = rRows[0].indexOf("LINE userId") !== -1 ? rRows[0].indexOf("LINE userId") : 6;
+    for (let j = 1; j < rRows.length; j++) {
+      if (String(rRows[j][1]).trim() === String(studentId).trim() || String(rRows[j][0]).trim() === String(studentId).trim()) {
+        lineUserId = String(rRows[j][colIdx] || "").trim();
+        break;
+      }
+    }
+  }
+
+  if (!lineUserId) {
+    return { ok: false, error: "นักเรียนรหัส " + studentId + " ยังไม่ได้ทำแบบประเมินผ่าน LINE หรือยังไม่ได้ผูก LINE ID" };
+  }
+
+  const logs = readTimelineLogs({ studentId: String(studentId).trim() });
+  if (logs.length === 0) {
+    return { ok: false, error: "ไม่พบประวัติผลประเมินของนักเรียนรหัส " + studentId };
+  }
+
+  const last = logs[0];
+  const info = roster[studentId] || {};
+  const d = {
+    studentId: studentId,
+    displayName: info.name || last.displayName || "-",
+    lineUserId: lineUserId,
+    st5Score: last.st5Score,
+    q2Score: last.q2Score,
+    q9Score: last.q9Score,
+    q8Score: last.q8Score
+  };
+  const risk = { level: last.riskLevel, reason: last.reason };
+
+  notifyStudentLine(d, risk);
+
+  return {
+    ok: true,
+    message: "ส่งผลประเมินส่วนตัวให้นักเรียน " + (info.name || studentId) + " ทาง LINE เรียบร้อยแล้ว",
+    studentId: studentId,
+    displayName: info.name || "-",
+    riskLevel: last.riskLevel
   };
 }
 
