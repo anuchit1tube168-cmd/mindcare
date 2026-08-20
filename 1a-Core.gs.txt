@@ -335,25 +335,44 @@ function notifyTeachers(alertId, d, risk) {
     "📁 บันทึกข้อมูลลง Excel/Google Sheet เรียบร้อยแล้ว\n" +
     "👉 โปรดเปิด Dashboard เพื่อรับเรื่องและประสานการดูแล";
 
-  // ส่งแจ้งเตือนหลัก
-  const res = sendAlert(text, risk.level);
+  // สร้างปุ่มกด Interactive ใน Telegram (Inline Keyboard)
+  const webAppUrl = "https://anuchit1tube168-cmd.github.io/mindcare/";
+  const liffUrl = "https://liff.line.me/2010984231-Z7kbSIPp";
+  const sheetUrl = "https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit";
 
-  // ถ้ามีภาพถ่ายใบหน้าขณะประเมิน -> ส่งภาพพร้อมแคปชันละเอียดเข้า Telegram Real-Time
+  const telegramButtons = {
+    inline_keyboard: [
+      [
+        { text: "📊 เปิด Google Sheet / ทะเบียนข้อมูล", url: sheetUrl }
+      ],
+      [
+        { text: "🌐 เปิดระบบดูแลใจ (Web App)", url: webAppUrl },
+        { text: "💚 เปิดใน LINE (LIFF)", url: liffUrl }
+      ]
+    ]
+  };
+
+  // ส่งแจ้งเตือนหลัก
+  let telegramSent = false;
+  // ถ้ามีภาพถ่ายใบหน้าขณะประเมิน -> ส่งภาพพร้อมแคปชันละเอียด + ปุ่มกดเข้า Telegram
   if (d.faceSnapshot && String(d.faceSnapshot).indexOf("data:image") === 0) {
     try {
       const base64Data = String(d.faceSnapshot).split(",")[1];
       const bytes = Utilities.base64Decode(base64Data);
       const photoBlob = Utilities.newBlob(bytes, "image/jpeg", "snapshot_" + d.studentId + ".jpg");
-      pushTelegramPhoto(photoBlob, text);
+      telegramSent = pushTelegramPhoto(photoBlob, text, telegramButtons);
     } catch (err) {
       logError("notifyTeachers.photo", err, alertId);
     }
   }
 
-  // ไม่ถึงมืออาจารย์เลยทั้งสองช่องทาง = เรื่องร้ายแรง ต้องมีร่องรอยไว้ตรวจ
-  if (!res.telegram && res.line === 0) {
-    logError("notifyTeachers", "ส่งแจ้งเตือนไม่สำเร็จทั้ง LINE และ Telegram", alertId);
+  // ถ้าไม่ได้ส่งผ่านรูป (หรือส่งรูปไม่สำเร็จ) -> ส่งเป็นข้อความตัวหนังสือพร้อมปุ่มกด
+  if (!telegramSent) {
+    telegramSent = pushTelegramMessage(text, telegramButtons);
   }
+
+  // ส่ง LINE (ถ้ามีโควตา)
+  sendAlertLineOnly(text, risk.level);
 }
 
 function pushLineMessage(token, userId, text) {
@@ -379,17 +398,25 @@ function pushLineMessage(token, userId, text) {
 /**
  * ส่งข้อความแจ้งเตือนเข้า Telegram group/chat
  */
-function pushTelegramMessage(text) {
+function pushTelegramMessage(text, replyMarkup) {
   const props = PropertiesService.getScriptProperties();
   const botToken = props.getProperty("TELEGRAM_BOT_TOKEN") || "8420567411:AAE1TRV1hipd_HysrNtgi3QxxXOo16wSt70";
   const chatId = props.getProperty("TELEGRAM_CHAT_ID") || "-5442365939";
   if (!botToken || !chatId) return false;
 
   try {
+    const payload = {
+      chat_id: chatId,
+      text: text,
+      disable_web_page_preview: true
+    };
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
+    }
     const res = UrlFetchApp.fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {
       method: "post",
       contentType: "application/json",
-      payload: JSON.stringify({ chat_id: chatId, text: text, disable_web_page_preview: true }),
+      payload: JSON.stringify(payload),
       muteHttpExceptions: true,
     });
     if (res.getResponseCode() !== 200) {
@@ -406,7 +433,7 @@ function pushTelegramMessage(text) {
 /**
  * ส่งภาพถ่ายใบหน้าเข้า Telegram group/chat (กรณีเฝ้าระวัง Real-Time)
  */
-function pushTelegramPhoto(photoBlob, caption) {
+function pushTelegramPhoto(photoBlob, caption, replyMarkup) {
   const props = PropertiesService.getScriptProperties();
   const botToken = props.getProperty("TELEGRAM_BOT_TOKEN") || "8420567411:AAE1TRV1hipd_HysrNtgi3QxxXOo16wSt70";
   const chatId = props.getProperty("TELEGRAM_CHAT_ID") || "-5442365939";
@@ -418,6 +445,9 @@ function pushTelegramPhoto(photoBlob, caption) {
       photo: photoBlob,
       caption: caption || "",
     };
+    if (replyMarkup) {
+      payload.reply_markup = JSON.stringify(replyMarkup);
+    }
     const res = UrlFetchApp.fetch("https://api.telegram.org/bot" + botToken + "/sendPhoto", {
       method: "post",
       payload: payload,

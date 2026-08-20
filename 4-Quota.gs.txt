@@ -121,6 +121,34 @@ function sendAlert(text, kind) {
   return result;
 }
 
+/**
+ * ส่งแจ้งเตือนทาง LINE เฉพาะเมื่อมีโควตา (แยกจาก Telegram)
+ */
+function sendAlertLineOnly(text, kind) {
+  const token = PropertiesService.getScriptProperties().getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  if (!token) return { line: 0 };
+
+  const recipients = getTeacherLineIds();
+  if (recipients.length === 0) return { line: 0 };
+
+  const remaining = getLineQuotaRemaining(token);
+  const threshold = lineQuotaThreshold(kind);
+  let targets = recipients;
+
+  if (remaining !== null && remaining !== Infinity) {
+    if (remaining < threshold) return { line: 0, skipped: true };
+    if (remaining < recipients.length) {
+      targets = recipients.slice(0, remaining);
+    }
+  }
+
+  let count = 0;
+  targets.forEach(function (userId) {
+    if (pushLineMessage(token, userId, text)) count++;
+  });
+  return { line: count };
+}
+
 /** ดูสถานะโควตา LINE จากเมนูในชีต (ใช้ตรวจก่อนถึงสิ้นเดือน) */
 function menuCheckQuota() {
   const ui = SpreadsheetApp.getUi();
