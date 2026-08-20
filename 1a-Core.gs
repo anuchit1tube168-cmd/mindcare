@@ -96,21 +96,74 @@ function handleTelegramWebhook(update) {
     const msg = update.message || (update.callback_query && update.callback_query.message);
     if (!msg) return;
     const chatId = msg.chat.id;
-    const text = String(msg.text || (update.callback_query && update.callback_query.data) || "").trim();
+    let text = String(msg.text || (update.callback_query && update.callback_query.data) || "").trim();
 
     if (!text) return;
 
-    const lower = text.toLowerCase();
+    // ถ้าขึ้นต้นด้วย / ให้ตัด / ออกเพื่อความยืดหยุ่น เช่น /รายงาน ปี 1 -> รายงาน ปี 1
+    const cleanText = text.replace(/^\//, "").trim();
+    const lower = cleanText.toLowerCase();
     const apiUrl = ScriptApp.getService().getUrl();
     const sheetUrl = "https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit";
 
-    // 1. คำสั่งตรวจสอบรายชื่อคนที่ยังไม่ทำ (/missing, /check, "ขาด", "ยังไม่ทำ", "เช็ค")
-    if (lower.indexOf("/missing") === 0 || lower.indexOf("/check") === 0 || lower.indexOf("ขาด") !== -1 || lower.indexOf("ยังไม่ทำ") !== -1 || lower.indexOf("เช็ค") !== -1) {
+    // 1. คำสั่งดึงข้อมูลรายงานผลแยกรายชั้นปี (เช่น "รายงาน ปี 1", "รายงาน", "ปี 1", "ปี 2", "ปี 3", "ปี 4", "year 1", "year1")
+    if (lower.indexOf("รายงาน") === 0 || lower.indexOf("year") === 0 || (lower.indexOf("ปี") === 0 && (cleanText.indexOf("1") !== -1 || cleanText.indexOf("2") !== -1 || cleanText.indexOf("3") !== -1 || cleanText.indexOf("4") !== -1))) {
+      let targetYear = "69";
+      let yearName = "ชั้นปีที่ 1 (รุ่น 69)";
+      if (cleanText.indexOf("2") !== -1 || cleanText.indexOf("68") !== -1) { targetYear = "68"; yearName = "ชั้นปีที่ 2 (รุ่น 68)"; }
+      else if (cleanText.indexOf("3") !== -1 || cleanText.indexOf("67") !== -1) { targetYear = "67"; yearName = "ชั้นปีที่ 3 (รุ่น 67)"; }
+      else if (cleanText.indexOf("4") !== -1 || cleanText.indexOf("66") !== -1) { targetYear = "66"; yearName = "ชั้นปีที่ 4 (รุ่น 66)"; }
+
+      const logs = readTimelineLogs({ year: targetYear });
+      const distinctStudents = {};
+      logs.forEach(function(l) { 
+        if (!distinctStudents[l.studentId]) distinctStudents[l.studentId] = l; 
+      });
+      const studentCount = Object.keys(distinctStudents).length;
+
+      let yReply = "📑 [รายงานผลประเมินสุขภาพใจ: " + yearName + "]\n" +
+        "------------------------------------\n" +
+        "• ประเมินแล้วทั้งหมด: " + studentCount + " คน (" + logs.length + " ครั้ง)\n" +
+        "------------------------------------\n";
+
+      if (studentCount > 0) {
+        yReply += "📋 รายชื่อและผลประเมินล่าสุด:\n";
+        Object.values(distinctStudents).slice(0, 15).forEach(function(s, idx) {
+          const riskIcon = s.riskLevel === "RED" ? "🔴" : (s.riskLevel === "ORANGE" ? "🟠" : (s.riskLevel === "YELLOW" ? "🟡" : "🟢"));
+          yReply += (idx + 1) + ". " + s.studentId + " " + s.displayName + " ➔ " + riskIcon + " " + s.riskLevel + " (ST5:" + s.st5Score + " 9Q:" + (s.q9Score !== "" ? s.q9Score : 0) + " 8Q:" + (s.q8Score !== "" ? s.q8Score : 0) + ")\n";
+        });
+        if (studentCount > 15) {
+          yReply += "... และอีก " + (studentCount - 15) + " คน (ดาวน์โหลดไฟล์เต็มได้ด้านล่าง)\n";
+        }
+      } else {
+        yReply += "⚠️ ยังไม่มีข้อมูลการประเมินในชั้นปีนี้\n";
+      }
+
+      const yButtons = {
+        inline_keyboard: [
+          [
+            { text: "📥 โหลดรายงานผล " + yearName + " (CSV)", url: apiUrl + "?report=downloadReport&year=" + targetYear }
+          ],
+          [
+            { text: "⚠️ ดูรายชื่อที่ยังไม่ทำ (" + yearName + ")", url: apiUrl + "?report=missing&year=" + targetYear }
+          ],
+          [
+            { text: "📊 เปิด Google Sheet", url: sheetUrl }
+          ]
+        ]
+      };
+
+      pushTelegramMessage(yReply, yButtons);
+      return;
+    }
+
+    // 2. คำสั่งตรวจสอบรายชื่อคนที่ยังไม่ทำ ("missing", "check", "ขาด", "ยังไม่ทำ", "เช็ค")
+    if (lower.indexOf("missing") === 0 || lower.indexOf("check") === 0 || lower.indexOf("ขาด") !== -1 || lower.indexOf("ยังไม่ทำ") !== -1 || lower.indexOf("เช็ค") !== -1) {
       let targetYear = "";
-      if (text.indexOf("1") !== -1 || text.indexOf("69") !== -1) targetYear = "69";
-      else if (text.indexOf("2") !== -1 || text.indexOf("68") !== -1) targetYear = "68";
-      else if (text.indexOf("3") !== -1 || text.indexOf("67") !== -1) targetYear = "67";
-      else if (text.indexOf("4") !== -1 || text.indexOf("66") !== -1) targetYear = "66";
+      if (cleanText.indexOf("1") !== -1 || cleanText.indexOf("69") !== -1) targetYear = "69";
+      else if (cleanText.indexOf("2") !== -1 || cleanText.indexOf("68") !== -1) targetYear = "68";
+      else if (cleanText.indexOf("3") !== -1 || cleanText.indexOf("67") !== -1) targetYear = "67";
+      else if (cleanText.indexOf("4") !== -1 || cleanText.indexOf("66") !== -1) targetYear = "66";
 
       const missingResult = checkMissingStudents(targetYear);
       
@@ -147,57 +200,8 @@ function handleTelegramWebhook(update) {
       return;
     }
 
-    // 2. คำสั่งดึงข้อมูลรายงานผลแยกรายชั้นปี (เช่น "ปี 1", "ปี 2", "ปี 3", "ปี 4", "/year1", "/year", "รายงานปี")
-    if (lower.indexOf("/year") === 0 || lower.indexOf("รายงานปี") !== -1 || (lower.indexOf("ปี") !== -1 && (text.indexOf("1") !== -1 || text.indexOf("2") !== -1 || text.indexOf("3") !== -1 || text.indexOf("4") !== -1))) {
-      let targetYear = "69";
-      let yearName = "ชั้นปีที่ 1 (รุ่น 69)";
-      if (text.indexOf("2") !== -1 || text.indexOf("68") !== -1) { targetYear = "68"; yearName = "ชั้นปีที่ 2 (รุ่น 68)"; }
-      else if (text.indexOf("3") !== -1 || text.indexOf("67") !== -1) { targetYear = "67"; yearName = "ชั้นปีที่ 3 (รุ่น 67)"; }
-      else if (text.indexOf("4") !== -1 || text.indexOf("66") !== -1) { targetYear = "66"; yearName = "ชั้นปีที่ 4 (รุ่น 66)"; }
-
-      const logs = readTimelineLogs({ year: targetYear });
-      const distinctStudents = {};
-      logs.forEach(function(l) { distinctStudents[l.studentId] = l; });
-      const studentCount = Object.keys(distinctStudents).length;
-
-      let yReply = "📑 [รายงานผลประเมินสุขภาพใจ: " + yearName + "]\n" +
-        "------------------------------------\n" +
-        "• จำนวนนักเรียนที่ประเมินแล้ว: " + studentCount + " คน (" + logs.length + " ครั้ง)\n" +
-        "------------------------------------\n";
-
-      if (logs.length > 0) {
-        yReply += "📋 รายชื่อและผลประเมินล่าสุด (ตัวอย่าง):\n";
-        Object.values(distinctStudents).slice(0, 15).forEach(function(s, idx) {
-          const riskIcon = s.riskLevel === "RED" ? "🔴" : (s.riskLevel === "ORANGE" ? "🟠" : (s.riskLevel === "YELLOW" ? "🟡" : "🟢"));
-          yReply += (idx + 1) + ". " + s.studentId + " " + s.displayName + " ➔ " + riskIcon + " " + s.riskLevel + " (ST5:" + s.st5Score + " 9Q:" + (s.q9Score || 0) + " 8Q:" + (s.q8Score || 0) + ")\n";
-        });
-        if (studentCount > 15) {
-          yReply += "... และอีก " + (studentCount - 15) + " คน (ดาวน์โหลดไฟล์เต็มได้ด้านล่าง)\n";
-        }
-      } else {
-        yReply += "⚠️ ยังไม่มีข้อมูลการประเมินในชั้นปีนี้\n";
-      }
-
-      const yButtons = {
-        inline_keyboard: [
-          [
-            { text: "📥 โหลดรายงานผล " + yearName + " (CSV)", url: apiUrl + "?report=downloadReport&year=" + targetYear }
-          ],
-          [
-            { text: "⚠️ ดูรายชื่อที่ยังไม่ทำ (" + yearName + ")", url: apiUrl + "?report=missing&year=" + targetYear }
-          ],
-          [
-            { text: "📊 เปิด Google Sheet", url: sheetUrl }
-          ]
-        ]
-      };
-
-      pushTelegramMessage(yReply, yButtons);
-      return;
-    }
-
-    // 3. คำสั่งสรุปภาพรวม (/summary, "สรุป", "ภาพรวม")
-    if (lower.indexOf("/summary") === 0 || lower.indexOf("สรุป") !== -1 || lower.indexOf("ภาพรวม") !== -1) {
+    // 3. คำสั่งสรุปภาพรวม ("summary", "สรุป", "ภาพรวม")
+    if (lower.indexOf("summary") === 0 || lower.indexOf("สรุป") !== -1 || lower.indexOf("ภาพรวม") !== -1) {
       const rep = buildWatchReport(7);
       const sumText = "📊 [รายงานสรุปภาพรวมสุขภาพใจ 7 วันล่าสุด]\n" +
         "ระบบดูแลใจ วพอ.พอ.\n" +
@@ -231,9 +235,9 @@ function handleTelegramWebhook(update) {
       return;
     }
 
-    // 3. ถ้าพิมพ์รหัสนักเรียน 7 หลักมาตรงๆ -> ดึงประวัติรายคนส่งกลับให้ทันที
-    if (/^\d{7}$/.test(text)) {
-      const studentId = text;
+    // 4. ถ้าพิมพ์รหัสนักเรียน 7 หลักมาตรงๆ -> ดึงประวัติรายคนส่งกลับให้ทันที
+    if (/^\d{7}$/.test(cleanText)) {
+      const studentId = cleanText;
       const logs = readTimelineLogs({ studentId: studentId });
       const roster = rosterMap();
       const info = roster[studentId] || {};
@@ -291,11 +295,22 @@ function checkMissingStudents(yearFilter) {
   let submittedCount = 0;
 
   for (let i = 1; i < rRows.length; i++) {
-    const sId = String(rRows[i][1] || rRows[i][0]).trim();
-    const name = rRows[i][2] || rRows[i][1] || "";
-    const year = rRows[i][3] || rRows[i][2] || "";
+    // ตรวจหาคอลัมน์ที่เป็นรหัสนักเรียน 7 หลัก (ไม่ว่าจะอยู่คอลัมน์ 0 หรือ 1)
+    let sId = "";
+    let name = "";
+    let year = "";
 
-    if (!sId || !/^\d{7}$/.test(sId)) continue;
+    for (let c = 0; c < 3; c++) {
+      const val = String(rRows[i][c] || "").trim();
+      if (/^\d{7}$/.test(val)) {
+        sId = val;
+        name = rRows[i][c + 1] || "";
+        year = rRows[i][c + 2] || "";
+        break;
+      }
+    }
+
+    if (!sId) continue;
     if (yearFilter && sId.indexOf(yearFilter) !== 0 && String(year).indexOf(yearFilter) === -1) continue;
 
     if (submittedSet[sId]) {
