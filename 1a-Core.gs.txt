@@ -211,23 +211,28 @@ function handleTelegramWebhook(update) {
       else if (cleanText.indexOf("4") !== -1 || cleanText.indexOf("66") !== -1) targetYear = "66";
 
       const missingResult = checkMissingStudents(targetYear);
+      const yearNames = { "69": "ชั้นปีที่ 1 (รุ่น 69)", "68": "ชั้นปีที่ 2 (รุ่น 68)", "67": "ชั้นปีที่ 3 (รุ่น 67)", "66": "ชั้นปีที่ 4 (รุ่น 66)" };
+      const targetLabel = targetYear ? (yearNames[targetYear] || ("รุ่น " + targetYear)) : "นักเรียนทุกชั้นปี";
       
       let reply = "📋 [ตรวจสอบสถานะการทำแบบประเมิน วพอ.พอ.]\n" +
+        "🎯 กลุ่มเป้าหมาย: " + targetLabel + "\n" +
         "------------------------------------\n" +
-        "• ประเมินแล้ว: " + missingResult.submittedCount + " คน\n" +
-        "• ยังไม่ทำ: " + missingResult.missingCount + " คน\n" +
+        "• ประเมินแล้ว: " + missingResult.submittedCount + (missingResult.expectedTotal ? ("/" + missingResult.expectedTotal) : "") + " คน\n" +
+        "• คงเหลือที่ยังไม่ทำ: " + missingResult.missingCount + " คน\n" +
         "------------------------------------\n";
 
       if (missingResult.missingList.length > 0) {
-        reply += "⚠️ รายชื่อผู้ที่ยังไม่ทำ" + (targetYear ? (" (รุ่น " + targetYear + ")") : "") + ":\n";
+        reply += "⚠️ รายชื่อผู้ที่ยังไม่ทำ" + (targetYear ? (" (" + targetLabel + ")") : "") + ":\n";
         missingResult.missingList.slice(0, 20).forEach(function(s, idx) {
           reply += (idx + 1) + ". " + s.id + " " + s.name + " (" + s.year + ")\n";
         });
         if (missingResult.missingList.length > 20) {
           reply += "... และอีก " + (missingResult.missingList.length - 20) + " คน (ดูทั้งหมดในตาราง)\n";
         }
+      } else if (missingResult.missingCount === 0) {
+        reply += "🎉 ยอดเยี่ยมมาก! ทุกคนในกลุ่มนี้ทำแบบประเมินครบถ้วน 100% แล้วครับ";
       } else {
-        reply += "🎉 ยอดเยี่ยมมาก! ทุกคนทำแบบประเมินครบถ้วน 100% แล้วครับ";
+        reply += "💡 กดปุ่มด้านล่างเพื่อดาวน์โหลดรายชื่อ หรือส่ง LINE ติดตามได้ทันที";
       }
 
       const buttons = {
@@ -326,22 +331,35 @@ function handleTelegramWebhook(update) {
 
 /**
  * ตรวจสอบรายชื่อนักเรียนที่ยังไม่ได้ทำแบบประเมิน
+ * หากชีต Roster ว่าง -> ใช้สถิติยอดประเมินรวมตามชั้นปีแทนอย่างแม่นยำ
  */
 function checkMissingStudents(yearFilter) {
   const rosterSheet = getSheet(SHEETS.ROSTER);
   const rRows = rosterSheet.getDataRange().getValues();
   const data = loadAssessments();
 
+  // กำหนดจำนวนนักเรียนเต็มของแต่ละชั้นปี วพอ.พอ. (Baseline Capacity)
+  // ปี 1 (รุ่น 69) = 54 คน, ปี 2 (รุ่น 68) = 60 คน, ปี 3 (รุ่น 67) = 65 คน, ปี 4 (รุ่น 66) = 46 คน (รวม ~225 คน)
+  const EXPECTED_PER_YEAR = { "69": 54, "68": 60, "67": 65, "66": 46 };
+
   const submittedSet = {};
+  const submittedByYear = { "69": {}, "68": {}, "67": {}, "66": {} };
+
   data.forEach(function (a) {
-    if (a.studentId) submittedSet[String(a.studentId).trim()] = true;
+    if (!a.studentId) return;
+    const sId = String(a.studentId).trim();
+    if (/^\d{7}$/.test(sId)) {
+      submittedSet[sId] = true;
+      const prefix = sId.substring(0, 2);
+      if (submittedByYear[prefix]) submittedByYear[prefix][sId] = true;
+    }
   });
 
   const missingList = [];
   let submittedCount = 0;
+  let hasValidRoster = false;
 
   for (let i = 1; i < rRows.length; i++) {
-    // ตรวจหาคอลัมน์ที่เป็นรหัสนักเรียน 7 หลัก (ไม่ว่าจะอยู่คอลัมน์ 0 หรือ 1)
     let sId = "";
     let name = "";
     let year = "";
@@ -357,12 +375,38 @@ function checkMissingStudents(yearFilter) {
     }
 
     if (!sId) continue;
+    hasValidRoster = true;
     if (yearFilter && sId.indexOf(yearFilter) !== 0 && String(year).indexOf(yearFilter) === -1) continue;
 
     if (submittedSet[sId]) {
       submittedCount++;
     } else {
       missingList.push({ id: sId, name: name, year: year });
+    }
+  }
+
+  // ถ้าระบบยังไม่มีรายชื่อในชีต Roster -> ใช้ยอดประเมินจริงแยกตามชั้นปี
+  if (!hasValidRoster) {
+    if (yearFilter && submittedByYear[yearFilter]) {
+      submittedCount = Object.keys(submittedByYear[yearFilter]).length;
+      const exp = EXPECTED_PER_YEAR[yearFilter] || submittedCount;
+      const diff = Math.max(0, exp - submittedCount);
+      return {
+        submittedCount: submittedCount,
+        missingCount: diff,
+        missingList: [],
+        expectedTotal: exp
+      };
+    } else {
+      submittedCount = Object.keys(submittedSet).length;
+      const totalExp = Object.values(EXPECTED_PER_YEAR).reduce(function(a, b) { return a + b; }, 0);
+      const totalMissing = Math.max(0, totalExp - submittedCount);
+      return {
+        submittedCount: submittedCount,
+        missingCount: totalMissing,
+        missingList: [],
+        expectedTotal: totalExp
+      };
     }
   }
 
@@ -413,6 +457,27 @@ function doGet(e) {
       },
       count: logs.length,
       logs: logs
+    });
+  }
+
+  // 2.1 ตรวจสอบสถานะการผูก LINE ID และทะเบียนนักเรียน
+  if (action === "debugBindings" || action === "checkBindings") {
+    const bindRows = getSheet(SHEETS.BINDINGS).getDataRange().getValues();
+    const rosterRows = getSheet(SHEETS.ROSTER).getDataRange().getValues();
+    const assessRows = getSheet(SHEETS.ASSESSMENTS).getDataRange().getValues();
+
+    let assessWithLine = 0;
+    for (let a = 1; a < assessRows.length; a++) {
+      if (assessRows[a][3]) assessWithLine++;
+    }
+
+    return output({
+      ok: true,
+      totalBindingsInSheet: bindRows.length - 1,
+      totalRoster: rosterRows.length - 1,
+      totalAssessments: assessRows.length - 1,
+      assessmentsWithLineId: assessWithLine,
+      sampleBindings: bindRows.slice(1, 10).map(function(r) { return { lineId: r[0], studentId: r[1] }; })
     });
   }
 
@@ -526,6 +591,21 @@ function doGet(e) {
   if (action === "exportDrive" || action === "getReportUrl") {
     const res = exportReportNow(Number(p.days || 7));
     return output(res);
+  }
+
+  // 8. หน้าทดสอบระบบอัตโนมัติ (Self-Test Diagnostics)
+  if (action === "test" || action === "selfTest") {
+    const testResult = runSelfTest();
+    return HtmlService.createHtmlOutput(
+      '<body style="font-family:monospace; background:#0F172A; color:#E2E8F0; padding:30px; line-height:1.6;">' +
+      '<h2 style="color:#38BDF8;">🧪 ผลการทดสอบระบบดูแลใจ (Self-Test Report)</h2>' +
+      '<pre style="background:#1E293B; padding:20px; border-radius:8px; border:1px solid #334155; white-space:pre-wrap;">' +
+      testResult +
+      '</pre>' +
+      '<br>' +
+      '<a href="?action=pushLineAll" style="padding:10px 20px; background:#059669; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold; font-family:sans-serif;">📲 ทดสอบส่ง LINE บรอดคาสต์</a>' +
+      '</body>'
+    );
   }
 
   return output({
@@ -1305,16 +1385,29 @@ function createAlert(assessmentId, d, risk) {
 function notifyTeachers(alertId, d, risk) {
   const isRed = risk.level === "RED";
   const isOrange = risk.level === "ORANGE";
-  const icon = isRed ? "🔴" : (isOrange ? "🟠" : "🟡");
-  const slaText = isRed ? "RED (พบแพทย์ทันที - SLA 1 ชั่วโมง)" : (isOrange ? "ORANGE (พบบุคลากรทางการแพทย์ - SLA 24 ชั่วโมง)" : "YELLOW (เฝ้าระวัง/พูดคุย)");
+  const isYellow = risk.level === "YELLOW";
+  const icon = isRed ? "🔴" : (isOrange ? "🟠" : (isYellow ? "🟡" : "🟢"));
+  const slaText = isRed ? "RED (พบแพทย์ทันที - SLA 1 ชั่วโมง)" : (isOrange ? "ORANGE (พบบุคลากรทางการแพทย์ - SLA 72 ชั่วโมง)" : (isYellow ? "YELLOW (เฝ้าระวัง/ชวนคุย)" : "GREEN (ปกติ)"));
   const nameStr = d.displayName ? d.displayName : ("รหัส " + d.studentId);
   const behScore = (d.behaviorIndex !== null && d.behaviorIndex !== undefined) ? d.behaviorIndex : "-";
 
+  // ดึงสถิติความคืบหน้ารายชั้นปีแบบ Real-time
+  const sId = String(d.studentId || "").trim();
+  const yearPrefix = sId.length >= 2 ? sId.substring(0, 2) : "";
+  const yearNames = { "69": "ชั้นปีที่ 1 (รุ่น 69)", "68": "ชั้นปีที่ 2 (รุ่น 68)", "67": "ชั้นปีที่ 3 (รุ่น 67)", "66": "ชั้นปีที่ 4 (รุ่น 66)" };
+  const yearStat = yearPrefix ? checkMissingStudents(yearPrefix) : null;
+  const yearLabel = yearNames[yearPrefix] || (yearPrefix ? ("รุ่น " + yearPrefix) : "ไม่ระบุชั้นปี");
+
   // แปลผลคะแนนแต่ละชุด
-  const st5Level = d.st5Score >= 10 ? " (ระดับสูง)" : (d.st5Score >= 8 ? " (ปานกลาง)" : " (ปกติ)");
-  const q2Level = d.q2Score >= 1 ? " (พบข้อบ่งชี้)" : " (ปกติ)";
-  const q9Level = d.q9Score >= 19 ? " (ระดับรุนแรงมาก)" : (d.q9Score >= 13 ? " (ระดับรุนแรง)" : (d.q9Score >= 7 ? " (ปานกลาง)" : " (ปกติ)"));
-  const q8Level = d.q8Score >= 17 ? " (ระดับรุนแรงมาก)" : (d.q8Score >= 9 ? " (ปานกลาง)" : " (เล็กน้อย)");
+  const st5Score = (d.st5Score !== null && d.st5Score !== undefined && d.st5Score !== "") ? Number(d.st5Score) : "-";
+  const q2Score = (d.q2Score !== null && d.q2Score !== undefined && d.q2Score !== "") ? Number(d.q2Score) : "-";
+  const q9Score = (d.q9Score !== null && d.q9Score !== undefined && d.q9Score !== "") ? Number(d.q9Score) : null;
+  const q8Score = (d.q8Score !== null && d.q8Score !== undefined && d.q8Score !== "") ? Number(d.q8Score) : null;
+
+  const st5Level = typeof st5Score === "number" ? (st5Score >= 10 ? " (ระดับสูง)" : (st5Score >= 8 ? " (ปานกลาง)" : " (ปกติ)")) : "";
+  const q2Level = typeof q2Score === "number" ? (q2Score >= 1 ? " (พบข้อบ่งชี้)" : " (ปกติ)") : "";
+  const q9Level = q9Score !== null ? (q9Score >= 19 ? " (ระดับรุนแรงมาก)" : (q9Score >= 13 ? " (ระดับรุนแรง)" : (q9Score >= 7 ? " (ปานกลาง)" : " (ปกติ)"))) : "";
+  const q8Level = q8Score !== null ? (q8Score >= 17 ? " (ระดับรุนแรงมาก)" : (q8Score >= 9 ? " (ปานกลาง)" : " (เล็กน้อย)")) : "";
 
   // สัญญาณพฤติกรรมใบหน้า AI
   let aiSignals = "";
@@ -1322,31 +1415,47 @@ function notifyTeachers(alertId, d, risk) {
     aiSignals =
       "📷 ดัชนีพฤติกรรม (กล้อง AI): " + behScore + "/100\n" +
       "⚠️ สัญญาณที่ระบบพบ:\n" +
-      " - คิ้วขมวดสะสม (AU4 Burst): " + (d.behaviorFlags && d.behaviorFlags.au4High ? "พบความตึงเครียดสูง" : "ปกติ") + "\n" +
-      " - การแสดงออกทางอารมณ์: " + (d.behaviorFlags && d.behaviorFlags.flatAffect ? "ไม่มีรอยยิ้มตลอดการทำ (Flat Affect)" : "ปกติ") + "\n" +
-      " - อัตราการกะพริบตา/การละสายตา: " + (d.behaviorFlags && d.behaviorFlags.eyeFatigue ? "พบลักษณะอ่อนล้า" : "ปกติ") + "\n";
+      " • คิ้วขมวดสะสม (AU4 Burst): " + (d.behaviorFlags && d.behaviorFlags.au4High ? "พบความตึงเครียดสูง" : "ปกติ") + "\n" +
+      " • การแสดงออกทางอารมณ์: " + (d.behaviorFlags && d.behaviorFlags.flatAffect ? "ไม่มีรอยยิ้มตลอดการทำ (Flat Affect)" : "ปกติ") + "\n" +
+      " • อัตราการกะพริบตา: " + (d.behaviorFlags && d.behaviorFlags.eyeFatigue ? "พบลักษณะอ่อนล้า" : "ปกติ") + "\n";
   } else {
     aiSignals = "📷 ดัชนีพฤติกรรม (กล้อง AI): ไม่ได้เปิดกล้อง\n";
   }
 
-  const text =
+  // สร้างข้อความแจ้งเตือน + อัปเดตความคืบหน้ารายชั้นปี
+  let text =
     icon + " [แจ้งเตือนด่วนดัชนีเฝ้าระวังล่าสุด]\n" +
     "ระบบดูแลใจ วพอ.พอ.\n" +
     "------------------------------------\n" +
-    "👤 รหัสนักเรียน/ชื่อ: " + d.studentId + " (" + nameStr + ")\n" +
+    "👤 นักเรียน: " + nameStr + " (" + d.studentId + ")\n" +
+    "🎓 ชั้นปี: " + yearLabel + "\n" +
     "📊 ระดับความเสี่ยง: " + icon + " " + slaText + "\n" +
     "📝 รายละเอียดผลประเมิน:\n" +
-    " • ST-5 (ความเครียด): " + (d.st5Score !== null ? d.st5Score : "-") + "/15 คะแนน" + st5Level + "\n" +
-    " • 2Q (คัดกรองซึมเศร้า): " + (d.q2Score !== null ? d.q2Score : "-") + "/2 คะแนน" + q2Level + "\n" +
-    " • 9Q (ประเมินซึมเศร้า): " + (d.q9Score !== null ? d.q9Score : "-") + "/27 คะแนน" + q9Level + "\n" +
-    " • 8Q (เสี่ยงทำร้ายตนเอง): " + (d.q8Score !== null ? d.q8Score : "-") + "/52 คะแนน" + q8Level + "\n" +
-    aiSignals +
+    " • ST-5 (ความเครียด): " + st5Score + "/15 คะแนน" + st5Level + "\n" +
+    " • 2Q (คัดกรองซึมเศร้า): " + q2Score + "/2 คะแนน" + q2Level + "\n";
+
+  if (q9Score !== null) {
+    text += " • 9Q (ประเมินซึมเศร้า): " + q9Score + "/27 คะแนน" + q9Level + "\n";
+  }
+  if (q8Score !== null) {
+    text += " • 8Q (เสี่ยงทำร้ายตนเอง): " + q8Score + "/52 คะแนน" + q8Level + "\n";
+  }
+
+  text += aiSignals +
     (d.conflictFlag ? "⚠️ สัญญาณขัดแย้ง: ตอบปกติแต่พฤติกรรมกล้องบ่งชี้ความตึงเครียด\n" : "") +
-    "------------------------------------\n" +
-    "🏥 สถานที่ส่งต่อ: รพ.ภูมิพลอดุลยเดช พอ. / รพ.กองบิน\n" +
+    "------------------------------------\n";
+
+  // ส่วนอัปเดตสถิติยอดทำของชั้นปี
+  if (yearStat) {
+    text += "📈 ความคืบหน้า " + yearLabel + ":\n" +
+      " • ทำแล้ว: " + yearStat.submittedCount + (yearStat.expectedTotal ? ("/" + yearStat.expectedTotal) : "") + " คน\n" +
+      " • คงเหลือที่ยังไม่ทำ: " + yearStat.missingCount + " คน\n" +
+      "------------------------------------\n";
+  }
+
+  text += "🏥 สถานที่ส่งต่อ: รพ.ภูมิพลอดุลยเดช พอ. / รพ.กองบิน\n" +
     "🆔 รหัสงาน (Alert ID): " + alertId + "\n" +
-    "📁 บันทึกข้อมูลลง Excel/Google Sheet เรียบร้อยแล้ว\n" +
-    "👉 โปรดเปิด Dashboard เพื่อรับเรื่องและประสานการดูแล";
+    "📁 บันทึกข้อมูลลง Excel/Google Sheet เรียบร้อยแล้ว";
 
   // สร้างปุ่มกด Interactive ใน Telegram (Inline Keyboard)
   const webAppUrl = "https://anuchit1tube168-cmd.github.io/mindcare/";
