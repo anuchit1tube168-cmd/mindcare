@@ -84,8 +84,24 @@ function doGet(e) {
   const p = e ? e.parameter : {};
   const action = p.action || p.report;
 
-  // 1. ดาวน์โหลดรายงานรายบุคคล (Individual Student Report)
-  if (action === "student" || action === "downloadStudentReport" || p.studentId) {
+  // 1. อ่าน Log / ประวัติผลประเมินตามช่วงเวลา (Read Log Timeline) ในรูปแบบ JSON API
+  if (action === "readLog" || action === "timeline") {
+    const logs = readTimelineLogs(p);
+    return output({
+      ok: true,
+      filter: {
+        days: p.days || "all",
+        level: p.level || "all",
+        year: p.year || "all",
+        studentId: p.studentId || "all"
+      },
+      count: logs.length,
+      logs: logs
+    });
+  }
+
+  // 2. ดาวน์โหลดรายงานรายบุคคล (Individual Student Report)
+  if (action === "student" || action === "downloadStudentReport" || (p.studentId && !action)) {
     const targetId = String(p.studentId || p.id || "").trim();
     const csvContent = generateStudentReportCsv(targetId);
     const filename = "MindCare_Student_" + (targetId || "Report") + "_" +
@@ -96,13 +112,15 @@ function doGet(e) {
       .downloadAsFile(filename);
   }
 
-  // 2. ดาวน์โหลดรายงานแยกตามระดับ (RED, ORANGE, YELLOW, ALL) หรือแยกตามชั้นปี
+  // 3. ดาวน์โหลดรายงานสรุปตามเงื่อนไข Time-line (วันย้อนหลัง/ช่วงวัน), ระดับความเสี่ยง, หรือชั้นปี
   if (action === "downloadReport" || action === "exportCsv" || action === "report") {
     const filterLevel = (p.level || "").toUpperCase(); // RED, ORANGE, YELLOW, หรือ ว่าง=ทั้งหมด
     const filterYear = (p.year || "").trim();          // กรองตามชั้นปี (เช่น ปี 1, ปี 2, 69)
-    const csvContent = generateReportCsv(filterLevel, filterYear);
+    const days = p.days ? Number(p.days) : null;       // กรอง N วันย้อนหลัง เช่น 1, 7, 30
+    const csvContent = generateReportCsv(filterLevel, filterYear, days);
     const filename = "MindCare_Report_" + (filterLevel || "ALL") +
-      (filterYear ? ("_Year" + filterYear) : "") + "_" +
+      (filterYear ? ("_Year" + filterYear) : "") +
+      (days ? ("_" + days + "Days") : "") + "_" +
       Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyyMMdd_HHmm") + ".csv";
     
     return ContentService.createTextOutput(csvContent)
@@ -110,7 +128,7 @@ function doGet(e) {
       .downloadAsFile(filename);
   }
 
-  // 3. ขอไฟล์รายงานล่าสุดใน Google Drive (Excel .xlsx)
+  // 4. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive
   if (action === "exportDrive" || action === "getReportUrl") {
     const res = exportReportNow(Number(p.days || 7));
     return output(res);
@@ -119,16 +137,68 @@ function doGet(e) {
   return output({
     ok: true,
     status: "RTAFNC MindCare API is running",
-    availableReports: {
-      all: "?report=downloadReport",
-      red: "?report=downloadReport&level=RED",
-      orange: "?report=downloadReport&level=ORANGE",
-      yellow: "?report=downloadReport&level=YELLOW",
-      byStudent: "?report=student&id=6903946",
-      byYear: "?report=downloadReport&year=1",
-      excelDrive: "?action=exportDrive"
+    endpoints: {
+      readLogTimeline: "?action=readLog&days=7",
+      readLogByStudent: "?action=readLog&studentId=6903946",
+      downloadReportAll: "?report=downloadReport",
+      downloadReportTimeline: "?report=downloadReport&days=7",
+      downloadReportRed: "?report=downloadReport&level=RED",
+      downloadReportOrange: "?report=downloadReport&level=ORANGE",
+      downloadReportYellow: "?report=downloadReport&level=YELLOW",
+      downloadReportByYear: "?report=downloadReport&year=1",
+      downloadReportByStudent: "?report=student&id=6903946",
+      exportDriveExcel: "?action=exportDrive&days=7"
     }
   });
+}
+
+/**
+ * ฟังก์ชันอ่าน Log ประวัติการประเมินตาม Timeline และเงื่อนไขที่กำหนด
+ */
+function readTimelineLogs(params) {
+  const data = loadAssessments();
+  const roster = rosterMap();
+  const alerts = alertStatusMap();
+
+  const days = params.days ? Number(params.days) : null;
+  const level = (params.level || "").toUpperCase();
+  const year = (params.year || "").trim();
+  const studentId = String(params.studentId || params.id || "").trim();
+  const now = new Date();
+  const since = days ? new Date(now.getTime() - days * 86400 * 1000) : null;
+
+  return data
+    .filter(function (a) {
+      if (since && new Date(a.ts) < since) return false;
+      if (level && level !== "ALL" && a.level !== level) return false;
+      if (studentId && String(a.studentId).trim() !== studentId) return false;
+      if (year) {
+        const info = roster[a.studentId];
+        const y = info && info.year ? String(info.year) : String(a.studentId || "").substring(0, 2);
+        if (y.indexOf(year) === -1) return false;
+      }
+      return true;
+    })
+    .sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); }) // Timeline ใหม่สุดก่อน
+    .map(function (a) {
+      const info = roster[a.studentId] || {};
+      const al = alerts[a.studentId] || {};
+      return {
+        timestamp: Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
+        studentId: a.studentId,
+        displayName: info.name || a.name || "-",
+        year: info.year || "-",
+        riskLevel: a.level,
+        st5Score: a.st5,
+        q2Score: a.q2,
+        q9Score: a.q9,
+        q8Score: a.q8,
+        cameraIndex: a.camIndex,
+        conflictFlag: a.conflict,
+        reason: a.reason,
+        alertStatus: al.status || "-"
+      };
+    });
 }
 
 /**
@@ -144,7 +214,7 @@ function generateStudentReportCsv(studentId) {
     list = data.filter(function (a) { return String(a.studentId).trim() === studentId; });
   }
 
-  // เรียงลำดับประวัติ: เวลาล่าสุดก่อน
+  // เรียงลำดับประวัติ: Timeline เวลาล่าสุดก่อน
   list.sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
 
   const info = roster[studentId] || {};
@@ -180,14 +250,19 @@ function generateStudentReportCsv(studentId) {
 }
 
 /**
- * สร้างข้อมูล CSV รายงานตามระดับความเสี่ยง และ/หรือ ชั้นปี
+ * สร้างข้อมูล CSV รายงานตาม Timeline, ระดับความเสี่ยง, และ/หรือ ชั้นปี
  */
-function generateReportCsv(filterLevel, filterYear) {
+function generateReportCsv(filterLevel, filterYear, filterDays) {
   const data = loadAssessments();
   const roster = rosterMap();
   const alerts = alertStatusMap();
+  const now = new Date();
+  const since = filterDays ? new Date(now.getTime() - filterDays * 86400 * 1000) : null;
 
   let filtered = data;
+  if (since) {
+    filtered = filtered.filter(function (a) { return new Date(a.ts) >= since; });
+  }
   if (filterLevel && filterLevel !== "ALL") {
     filtered = filtered.filter(function (a) { return a.level === filterLevel; });
   }
@@ -199,7 +274,7 @@ function generateReportCsv(filterLevel, filterYear) {
     });
   }
 
-  // เรียงลำดับ: รุนแรงก่อน -> เวลาล่าสุดก่อน
+  // เรียงลำดับ: Timeline วันที่ล่าสุดก่อน (หากระดับต่างกันให้แสดงระดับรุนแรงก่อน)
   filtered.sort(function (a, b) {
     const d = riskRank(b.level) - riskRank(a.level);
     return d !== 0 ? d : new Date(b.ts) - new Date(a.ts);
@@ -533,26 +608,21 @@ function notifyTeachers(alertId, d, risk) {
 
   // สร้างปุ่มกด Interactive ใน Telegram (Inline Keyboard)
   const webAppUrl = "https://anuchit1tube168-cmd.github.io/mindcare/";
-  const liffUrl = "https://liff.line.me/2010984231-Z7kbSIPp";
   const sheetUrl = "https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit";
   const apiUrl = ScriptApp.getService().getUrl();
 
   const telegramButtons = {
     inline_keyboard: [
       [
-        { text: "👤 โหลดรายงานรายคน (" + d.studentId + ")", url: apiUrl + "?report=student&id=" + encodeURIComponent(d.studentId) }
+        { text: "👤 📥 โหลดรายงานประวัติรายคน (" + d.studentId + ")", url: apiUrl + "?report=student&id=" + encodeURIComponent(d.studentId) }
       ],
       [
-        { text: "📊 เปิด Google Sheet / ทะเบียน", url: sheetUrl },
-        { text: "🌐 เว็บระบบดูแลใจ", url: webAppUrl }
+        { text: "📊 เปิด Google Sheet", url: sheetUrl },
+        { text: "🌐 เปิดระบบดูแลใจ", url: webAppUrl }
       ],
       [
-        { text: "📥 โหลดรายงาน 🔴 RED", url: apiUrl + "?report=downloadReport&level=RED" },
-        { text: "📥 โหลดรายงาน 🟠 ORANGE", url: apiUrl + "?report=downloadReport&level=ORANGE" }
-      ],
-      [
-        { text: "📥 โหลดรายงาน 🟡 YELLOW", url: apiUrl + "?report=downloadReport&level=YELLOW" },
-        { text: "📥 โหลดรายงานทั้งหมด (CSV)", url: apiUrl + "?report=downloadReport&level=ALL" }
+        { text: "📑 โหลด Log ย้อนหลัง 7 วัน", url: apiUrl + "?report=downloadReport&days=7" },
+        { text: "🔴 โหลดเคส RED ล่าสุด", url: apiUrl + "?report=downloadReport&level=RED" }
       ]
     ]
   };
