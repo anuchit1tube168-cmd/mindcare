@@ -84,11 +84,11 @@ function doGet(e) {
   const p = e ? e.parameter : {};
   const action = p.action || p.report;
 
-  // 1. ดาวน์โหลดรายงานแยกตามระดับ (RED, ORANGE, YELLOW, ALL) เป็น CSV
-  if (action === "downloadReport" || action === "exportCsv" || action === "report") {
-    const filterLevel = (p.level || "").toUpperCase(); // RED, ORANGE, YELLOW, หรือ ว่าง=ทั้งหมด
-    const csvContent = generateReportCsv(filterLevel);
-    const filename = "MindCare_Report_" + (filterLevel || "ALL") + "_" +
+  // 1. ดาวน์โหลดรายงานรายบุคคล (Individual Student Report)
+  if (action === "student" || action === "downloadStudentReport" || p.studentId) {
+    const targetId = String(p.studentId || p.id || "").trim();
+    const csvContent = generateStudentReportCsv(targetId);
+    const filename = "MindCare_Student_" + (targetId || "Report") + "_" +
       Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyyMMdd_HHmm") + ".csv";
     
     return ContentService.createTextOutput(csvContent)
@@ -96,7 +96,21 @@ function doGet(e) {
       .downloadAsFile(filename);
   }
 
-  // 2. ขอไฟล์รายงานล่าสุดใน Google Drive (Excel .xlsx)
+  // 2. ดาวน์โหลดรายงานแยกตามระดับ (RED, ORANGE, YELLOW, ALL) หรือแยกตามชั้นปี
+  if (action === "downloadReport" || action === "exportCsv" || action === "report") {
+    const filterLevel = (p.level || "").toUpperCase(); // RED, ORANGE, YELLOW, หรือ ว่าง=ทั้งหมด
+    const filterYear = (p.year || "").trim();          // กรองตามชั้นปี (เช่น ปี 1, ปี 2, 69)
+    const csvContent = generateReportCsv(filterLevel, filterYear);
+    const filename = "MindCare_Report_" + (filterLevel || "ALL") +
+      (filterYear ? ("_Year" + filterYear) : "") + "_" +
+      Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyyMMdd_HHmm") + ".csv";
+    
+    return ContentService.createTextOutput(csvContent)
+      .setMimeType(ContentService.MimeType.CSV)
+      .downloadAsFile(filename);
+  }
+
+  // 3. ขอไฟล์รายงานล่าสุดใน Google Drive (Excel .xlsx)
   if (action === "exportDrive" || action === "getReportUrl") {
     const res = exportReportNow(Number(p.days || 7));
     return output(res);
@@ -110,22 +124,79 @@ function doGet(e) {
       red: "?report=downloadReport&level=RED",
       orange: "?report=downloadReport&level=ORANGE",
       yellow: "?report=downloadReport&level=YELLOW",
+      byStudent: "?report=student&id=6903946",
+      byYear: "?report=downloadReport&year=1",
       excelDrive: "?action=exportDrive"
     }
   });
 }
 
 /**
- * สร้างข้อมูล CSV รายงานตามระดับความเสี่ยง
+ * สร้างข้อมูล CSV รายงานประวัติรายบุคคลของนักเรียนคนนั้น
  */
-function generateReportCsv(filterLevel) {
+function generateStudentReportCsv(studentId) {
+  const data = loadAssessments();
+  const roster = rosterMap();
+  const alerts = alertStatusMap();
+
+  let list = data;
+  if (studentId) {
+    list = data.filter(function (a) { return String(a.studentId).trim() === studentId; });
+  }
+
+  // เรียงลำดับประวัติ: เวลาล่าสุดก่อน
+  list.sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
+
+  const info = roster[studentId] || {};
+  const al = alerts[studentId] || {};
+
+  const headers = [
+    "ครั้งที่", "วันเวลาประเมิน", "รหัสประจำตัว", "ชื่อ-สกุล", "ชั้นปี/รุ่น",
+    "ระดับความเสี่ยง", "ST-5 (เครียด)", "2Q (คัดกรอง)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)",
+    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "เหตุผลความเสี่ยง", "สถานะติดตามงาน"
+  ];
+
+  const rows = [headers];
+  list.forEach(function (a, idx) {
+    rows.push([
+      list.length - idx,
+      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
+      a.studentId,
+      info.name ? info.name : (a.name || "-"),
+      info.year ? info.year : "-",
+      a.level,
+      a.st5 !== null && a.st5 !== undefined ? a.st5 : "-",
+      a.q2 !== null && a.q2 !== undefined ? a.q2 : "-",
+      a.q9 !== null && a.q9 !== undefined ? a.q9 : "-",
+      a.q8 !== null && a.q8 !== undefined ? a.q8 : "-",
+      a.camIndex !== null && a.camIndex !== undefined ? a.camIndex : "-",
+      a.conflict ? "พบสัญญาณขัดแย้ง" : "ปกติ",
+      '"' + String(a.reason || "").replace(/"/g, '""') + '"',
+      al.status ? al.status : "-"
+    ]);
+  });
+
+  return "\uFEFF" + rows.map(function (r) { return r.join(","); }).join("\r\n");
+}
+
+/**
+ * สร้างข้อมูล CSV รายงานตามระดับความเสี่ยง และ/หรือ ชั้นปี
+ */
+function generateReportCsv(filterLevel, filterYear) {
   const data = loadAssessments();
   const roster = rosterMap();
   const alerts = alertStatusMap();
 
   let filtered = data;
   if (filterLevel && filterLevel !== "ALL") {
-    filtered = data.filter(function (a) { return a.level === filterLevel; });
+    filtered = filtered.filter(function (a) { return a.level === filterLevel; });
+  }
+  if (filterYear) {
+    filtered = filtered.filter(function (a) {
+      const info = roster[a.studentId];
+      const y = info && info.year ? String(info.year) : String(a.studentId || "").substring(0, 2);
+      return y.indexOf(filterYear) !== -1;
+    });
   }
 
   // เรียงลำดับ: รุนแรงก่อน -> เวลาล่าสุดก่อน
@@ -468,6 +539,9 @@ function notifyTeachers(alertId, d, risk) {
 
   const telegramButtons = {
     inline_keyboard: [
+      [
+        { text: "👤 โหลดรายงานรายคน (" + d.studentId + ")", url: apiUrl + "?report=student&id=" + encodeURIComponent(d.studentId) }
+      ],
       [
         { text: "📊 เปิด Google Sheet / ทะเบียน", url: sheetUrl },
         { text: "🌐 เว็บระบบดูแลใจ", url: webAppUrl }

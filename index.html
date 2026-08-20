@@ -527,7 +527,12 @@
     <p id="tip-text"></p>
   </div>
 
-  <button class="btn btn-brick" id="btn-help">อยากคุยกับใครสักคน</button>
+  <div style="display:flex; flex-direction:column; gap:10px; margin-top:16px;">
+    <button class="btn btn-gold" id="btn-download-my-report" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+      📥 ดาวน์โหลดรายงานผลของฉัน (CSV/Excel)
+    </button>
+    <button class="btn btn-brick" id="btn-help">อยากคุยกับใครสักคน</button>
+  </div>
 
   <details class="debug" id="debug-panel">
     <summary>ดัชนีพฤติกรรมระหว่างทำ (แผงสำหรับทีมพัฒนา)</summary>
@@ -598,7 +603,7 @@
    - STUDENT_ID: fallback เมื่อไม่มี LIFF — ระบบจริงจะดึงจาก LINE
    ========================================================= */
 const CONFIG = {
-  GAS_ENDPOINT: "https://script.google.com/macros/s/AKfycbwdiXiRbFm9FzO6EtdSrez4zom0ZCNgrOdGtshfW-Js1vXTPolHhRRPfBDQfUrTef7E1w/exec",
+  GAS_ENDPOINT: "https://script.google.com/macros/s/AKfycbxxesC-uB1L1LJYVgHw5OMBzQ05BHt5DyiFCzDslz11i6aayNMmxvcsyHloRaB8Ecg6yw/exec",
   LIFF_ID: "2010984231-Z7kbSIPp",
   STUDENT_ID: "TEST-001",    // ใช้เมื่อไม่มี LIFF (โหมดทดสอบ)
 };
@@ -1883,6 +1888,17 @@ document.getElementById("btn-next").addEventListener("click", nextQuestion);
 document.getElementById("btn-back").addEventListener("click", () => {
   if (state.qIdx > 0) { state.qIdx--; slideToQuestion("right"); }
 });
+document.getElementById("btn-download-my-report").addEventListener("click", () => {
+  const sId = identity.id || CONFIG.STUDENT_ID || "";
+  if (!CONFIG.GAS_ENDPOINT) {
+    showToast("ยังไม่ได้เชื่อมต่อระบบคลาวด์");
+    return;
+  }
+  showToast("กำลังดาวน์โหลดรายงานของคุณ...");
+  const downloadUrl = `${CONFIG.GAS_ENDPOINT}?report=student&id=${encodeURIComponent(sId)}`;
+  window.open(downloadUrl, "_blank");
+});
+
 document.getElementById("btn-help").addEventListener("click", () => {
   showToast("ในระบบจริง ปุ่มนี้จะเชื่อมต่ออาจารย์ผู้ดูแล / คุยแบบนิรนาม / สายด่วน 1323");
 });
