@@ -81,7 +81,88 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  return output({ ok: true, status: "RTAFNC MindCare API is running" });
+  const p = e ? e.parameter : {};
+  const action = p.action || p.report;
+
+  // 1. ดาวน์โหลดรายงานแยกตามระดับ (RED, ORANGE, YELLOW, ALL) เป็น CSV
+  if (action === "downloadReport" || action === "exportCsv" || action === "report") {
+    const filterLevel = (p.level || "").toUpperCase(); // RED, ORANGE, YELLOW, หรือ ว่าง=ทั้งหมด
+    const csvContent = generateReportCsv(filterLevel);
+    const filename = "MindCare_Report_" + (filterLevel || "ALL") + "_" +
+      Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyyMMdd_HHmm") + ".csv";
+    
+    return ContentService.createTextOutput(csvContent)
+      .setMimeType(ContentService.MimeType.CSV)
+      .downloadAsFile(filename);
+  }
+
+  // 2. ขอไฟล์รายงานล่าสุดใน Google Drive (Excel .xlsx)
+  if (action === "exportDrive" || action === "getReportUrl") {
+    const res = exportReportNow(Number(p.days || 7));
+    return output(res);
+  }
+
+  return output({
+    ok: true,
+    status: "RTAFNC MindCare API is running",
+    availableReports: {
+      all: "?report=downloadReport",
+      red: "?report=downloadReport&level=RED",
+      orange: "?report=downloadReport&level=ORANGE",
+      yellow: "?report=downloadReport&level=YELLOW",
+      excelDrive: "?action=exportDrive"
+    }
+  });
+}
+
+/**
+ * สร้างข้อมูล CSV รายงานตามระดับความเสี่ยง
+ */
+function generateReportCsv(filterLevel) {
+  const data = loadAssessments();
+  const roster = rosterMap();
+  const alerts = alertStatusMap();
+
+  let filtered = data;
+  if (filterLevel && filterLevel !== "ALL") {
+    filtered = data.filter(function (a) { return a.level === filterLevel; });
+  }
+
+  // เรียงลำดับ: รุนแรงก่อน -> เวลาล่าสุดก่อน
+  filtered.sort(function (a, b) {
+    const d = riskRank(b.level) - riskRank(a.level);
+    return d !== 0 ? d : new Date(b.ts) - new Date(a.ts);
+  });
+
+  const headers = [
+    "ระดับความเสี่ยง", "รหัสประจำตัว", "ชื่อ-สกุล", "ชั้นปี/รุ่น", "วันเวลาประเมิน",
+    "ST-5 (เครียด)", "2Q (คัดกรอง)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)",
+    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "เหตุผลความเสี่ยง", "สถานะติดตามงาน"
+  ];
+
+  const rows = [headers];
+  filtered.forEach(function (a) {
+    const info = roster[a.studentId];
+    const al = alerts[a.studentId];
+    rows.push([
+      a.level,
+      a.studentId,
+      info && info.name ? info.name : (a.name || "-"),
+      info && info.year ? info.year : "-",
+      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
+      a.st5 !== null && a.st5 !== undefined ? a.st5 : "-",
+      a.q2 !== null && a.q2 !== undefined ? a.q2 : "-",
+      a.q9 !== null && a.q9 !== undefined ? a.q9 : "-",
+      a.q8 !== null && a.q8 !== undefined ? a.q8 : "-",
+      a.camIndex !== null && a.camIndex !== undefined ? a.camIndex : "-",
+      a.conflict ? "พบสัญญาณขัดแย้ง" : "ปกติ",
+      '"' + String(a.reason || "").replace(/"/g, '""') + '"',
+      al ? al.status : "-"
+    ]);
+  });
+
+  // BOM สำหรับ Excel ภาษาไทย (\uFEFF)
+  return "\uFEFF" + rows.map(function (r) { return r.join(","); }).join("\r\n");
 }
 
 /* ==========================================================
@@ -339,15 +420,21 @@ function notifyTeachers(alertId, d, risk) {
   const webAppUrl = "https://anuchit1tube168-cmd.github.io/mindcare/";
   const liffUrl = "https://liff.line.me/2010984231-Z7kbSIPp";
   const sheetUrl = "https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit";
+  const apiUrl = ScriptApp.getService().getUrl();
 
   const telegramButtons = {
     inline_keyboard: [
       [
-        { text: "📊 เปิด Google Sheet / ทะเบียนข้อมูล", url: sheetUrl }
+        { text: "📊 เปิด Google Sheet / ทะเบียน", url: sheetUrl },
+        { text: "🌐 เว็บระบบดูแลใจ", url: webAppUrl }
       ],
       [
-        { text: "🌐 เปิดระบบดูแลใจ (Web App)", url: webAppUrl },
-        { text: "💚 เปิดใน LINE (LIFF)", url: liffUrl }
+        { text: "📥 โหลดรายงาน 🔴 RED", url: apiUrl + "?report=downloadReport&level=RED" },
+        { text: "📥 โหลดรายงาน 🟠 ORANGE", url: apiUrl + "?report=downloadReport&level=ORANGE" }
+      ],
+      [
+        { text: "📥 โหลดรายงาน 🟡 YELLOW", url: apiUrl + "?report=downloadReport&level=YELLOW" },
+        { text: "📥 โหลดรายงานทั้งหมด (CSV)", url: apiUrl + "?report=downloadReport&level=ALL" }
       ]
     ]
   };
