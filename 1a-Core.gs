@@ -398,7 +398,20 @@ function doGet(e) {
       .downloadAsFile(filename);
   }
 
-  // 4. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive
+  // 4. ดาวน์โหลดรายงานในรูปแบบไฟล์ Microsoft Excel (.xlsx) โดยตรงจาก Spreadsheet
+  if (action === "xlsx" || action === "downloadExcel" || action === "excel") {
+    const spreadsheetId = "1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ";
+    const exportXlsxUrl = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/export?format=xlsx";
+    return HtmlService.createHtmlOutput(
+      '<html><head><meta http-equiv="refresh" content="0; url=' + exportXlsxUrl + '"></head>' +
+      '<body style="font-family:sans-serif; text-align:center; padding:40px;">' +
+      '<h2>กำลังเตรียมไฟล์ Microsoft Excel (.xlsx)...</h2>' +
+      '<p>หากการดาวน์โหลดไม่เริ่มอัตโนมัติ <a href="' + exportXlsxUrl + '">คลิกที่นี่เพื่อดาวน์โหลด</a></p>' +
+      '</body></html>'
+    );
+  }
+
+  // 5. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive
   if (action === "exportDrive" || action === "getReportUrl") {
     const res = exportReportNow(Number(p.days || 7));
     return output(res);

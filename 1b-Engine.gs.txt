@@ -102,50 +102,149 @@ function weeklyWatchReport() {
  * แล้วแปลงเป็น .xlsx ผ่าน Drive API export ก่อนลบ Sheet ต้นฉบับทิ้ง
  * (GAS สร้าง .xlsx ตรงไม่ได้ ต้องผ่าน Google Sheet เป็นตัวกลาง)
  */
+/**
+ * สร้างไฟล์รายงาน Excel (.xlsx) แบบสมบูรณ์ระดับมืออาชีพ
+ * ประกอบด้วย 4 แท็บในไฟล์เดียว:
+ *  1. สรุปภาพรวมผู้บริหาร (Executive Summary)
+ *  2. สรุปรายชั้นปี (Yearly Summary)
+ *  3. รายงานผลรายคนทุกคน (เรียงรหัส + คะแนน ST-5, 2Q, 9Q, 8Q, ดัชนีกล้อง AI)
+ *  4. ทะเบียนกลุ่มเสี่ยงที่ต้องดูแล (At-Risk Follow-up)
+ */
 function exportReportToDrive(report) {
   const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
   const now = new Date();
-  const stamp = Utilities.formatDate(now, "Asia/Bangkok", "yyyy-MM-dd_HHmm");
-  const title = "รายงานเฝ้าระวัง_" + stamp;
+  const stamp = Utilities.formatDate(now, "Asia/Bangkok", "yyyyMMdd_HHmm");
+  const title = "รายงานสรุปสุขภาพจิต_วพอ_พอ_" + stamp;
 
   // สร้าง Google Sheet ชั่วคราว
   const ss = SpreadsheetApp.create(title);
-  const sheet = ss.getSheets()[0];
-  sheet.setName("รายงานแยกประเภท");
-
+  
+  // Sheet 1: สรุปภาพรวมผู้บริหาร
+  const s1 = ss.getSheets()[0];
+  s1.setName("สรุปภาพรวมผู้บริหาร");
   const byYear = report.byStudentYear || {};
-  const rows = [];
-  rows.push(["รายงานเฝ้าระวังสุขภาพใจ ระบบดูแลใจ วพอ.พอ.", "", "", ""]);
-  rows.push(["สร้างเมื่อ", Utilities.formatDate(now, "Asia/Bangkok", "dd/MM/yyyy HH:mm"),
-             "ช่วงข้อมูล(วัน)", report.periodDays]);
-  rows.push(["", "", "", ""]);
-  rows.push(["๑) แยกตามระดับความเสี่ยง", "", "", ""]);
-  rows.push(["ระดับ", "จำนวน (ครั้ง)", "", ""]);
-  rows.push(["RED (เสี่ยงสูงสุด)", report.byRisk.RED, "", ""]);
-  rows.push(["ORANGE (สำคัญ)", report.byRisk.ORANGE, "", ""]);
-  rows.push(["YELLOW (ควรชวนคุย)", report.byRisk.YELLOW, "", ""]);
-  rows.push(["GREEN (ปกติ)", report.byRisk.GREEN, "", ""]);
-  rows.push(["รวมทั้งหมด", report.total, "", ""]);
-  rows.push(["", "", "", ""]);
-  rows.push(["๒) แยกตามชั้นปี", "ประเมินทั้งหมด", "ต้องดูแล(แดง+ส้ม+เหลือง)", ""]);
-  Object.keys(byYear).sort().forEach(function (y) {
-    rows.push([y, byYear[y].total, byYear[y].atRisk, ""]);
+  const s1Rows = [
+    ["รายงานผลการประเมินสุขภาพจิตและดัชนีความเครียด (Executive Summary)", "", "", ""],
+    ["วิทยาลัยพยาบาลทหารอากาศ กรมแพทย์ทหารอากาศ", "", "", ""],
+    ["สร้างเมื่อ", Utilities.formatDate(now, "Asia/Bangkok", "dd/MM/yyyy HH:mm"), "ช่วงข้อมูลย้อนหลัง(วัน)", report.periodDays || 30],
+    ["", "", "", ""],
+    ["๑) สรุปภาพรวมตามระดับความเสี่ยง (Risk Levels)", "จำนวน (คน/ครั้ง)", "สัดส่วน (%)", "เกณฑ์การดูแลส่งต่อ"],
+    ["RED (เสี่ยงสูงสุด)", report.byRisk.RED, (report.total ? (Math.round(report.byRisk.RED / report.total * 1000) / 10 + "%") : "-"), "พบแพทย์ รพ.ภูมิพลอดุลยเดช พอ. ทันที (ภายใน 1 ชม.)"],
+    ["ORANGE (สำคัญ)", report.byRisk.ORANGE, (report.total ? (Math.round(report.byRisk.ORANGE / report.total * 1000) / 10 + "%") : "-"), "พบอาจารย์/นัดหมายแพทย์ภายใน 3 วัน (72 ชม.)"],
+    ["YELLOW (ควรชวนคุย/เฝ้าระวัง)", report.byRisk.YELLOW, (report.total ? (Math.round(report.byRisk.YELLOW / report.total * 1000) / 10 + "%") : "-"), "อาจารย์ที่ปรึกษาชวนคุยภายใน 1 สัปดาห์"],
+    ["GREEN (ปกติ)", report.byRisk.GREEN, (report.total ? (Math.round(report.byRisk.GREEN / report.total * 1000) / 10 + "%") : "-"), "ส่งเสริมสุขภาวะและการดูแลสุขภาพจิตตนเอง"],
+    ["รวมทั้งหมด", report.total, "100%", "-"],
+    ["", "", "", ""],
+    ["๒) ดัชนีพฤติกรรมใบหน้า AI (Behavioral AI)", "จำนวนครั้ง", "", ""],
+    ["พบสัญญาณขัดแย้ง (แบบสอบถามปกติแต่กล้องพบเครียด)", report.cameraConflicts, "", ""],
+    ["", "", "", ""],
+    ["๓) สถานะการติดตามงานดูแล (Alert Follow-up)", "จำนวนงาน", "เกินกำหนด SLA", ""],
+    ["งานที่อยู่ระหว่างติดตามดูแล", report.openAlerts, report.overdue, ""]
+  ];
+  s1.getRange(1, 1, s1Rows.length, 4).setValues(s1Rows);
+  s1.getRange(1, 1, 1, 4).merge().setFontWeight("bold").setFontSize(13);
+  s1.getRange(2, 1, 1, 4).merge().setFontColor("#555555").setFontSize(11);
+  [5, 12, 14].forEach(function (r) {
+    s1.getRange(r, 1, 1, 4).setFontWeight("bold").setBackground("#1B4332").setFontColor("#FFFFFF");
   });
-  rows.push(["", "", "", ""]);
-  rows.push(["๓) สัญญาณจากกล้อง", "", "", ""]);
-  rows.push(["สัญญาณขัดแย้ง (ตอบปกติแต่ดัชนีสูง)", report.cameraConflicts, "", ""]);
-  rows.push(["", "", "", ""]);
-  rows.push(["๔) งานติดตาม", "", "", ""]);
-  rows.push(["งานค้างทั้งหมด", report.openAlerts, "เกินกำหนด", report.overdue]);
+  s1.autoResizeColumns(1, 4);
 
-  sheet.getRange(1, 1, rows.length, 4).setValues(rows);
-  // จัดรูปแบบหัวตาราง
-  sheet.getRange(1, 1, 1, 4).merge().setFontWeight("bold").setFontSize(13);
-  [4, 12, 15, 18].forEach(function (r) {
-    sheet.getRange(r, 1, 1, 4).setFontWeight("bold").setBackground("#1B4332").setFontColor("#FFFFFF");
+  // Sheet 2: รายงานรายบุคคลทุกคน (เรียงตามรหัส)
+  const s2 = ss.insertSheet("ผลประเมินรายคนทุกคน");
+  const assessments = loadAssessments();
+  const roster = rosterMap();
+  const alerts = alertStatusMap();
+
+  assessments.sort(function (a, b) {
+    return String(a.studentId || "").localeCompare(String(b.studentId || ""));
   });
-  sheet.setColumnWidth(1, 260); sheet.setColumnWidth(2, 130);
-  sheet.setColumnWidth(3, 200); sheet.setColumnWidth(4, 120);
+
+  const s2Headers = [
+    "ลำดับ", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ระดับความเสี่ยง",
+    "ST-5 (เครียด /15)", "2Q (คัดกรอง /2)", "9Q (ซึมเศร้า /27)", "8Q (ทำร้ายตนเอง /52)",
+    "ดัชนีกล้อง AI (/100)", "สัญญาณขัดแย้ง", "วันเวลาประเมิน", "เหตุผลการแปลผล", "สถานะติดตาม"
+  ];
+  const s2Rows = [s2Headers];
+  assessments.forEach(function (a, idx) {
+    const info = roster[a.studentId] || {};
+    const al = alerts[a.studentId] || {};
+    s2Rows.push([
+      idx + 1,
+      '="' + String(a.studentId) + '"',
+      info.name ? info.name : (a.name || "-"),
+      info.year ? info.year : "-",
+      a.level,
+      a.st5 !== null && a.st5 !== undefined && a.st5 !== "" ? a.st5 : "-",
+      a.q2 !== null && a.q2 !== undefined && a.q2 !== "" ? a.q2 : "-",
+      a.q9 !== null && a.q9 !== undefined && a.q9 !== "" ? a.q9 : "-",
+      a.q8 !== null && a.q8 !== undefined && a.q8 !== "" ? a.q8 : "-",
+      a.camIndex !== null && a.camIndex !== undefined && a.camIndex !== "" ? a.camIndex : "-",
+      a.conflict ? "พบขัดแย้ง" : "ปกติ",
+      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
+      a.reason || "-",
+      al.status || "-"
+    ]);
+  });
+  s2.getRange(1, 1, s2Rows.length, s2Headers.length).setValues(s2Rows);
+  s2.getRange(1, 1, 1, s2Headers.length).setFontWeight("bold").setBackground("#1B4332").setFontColor("#FFFFFF");
+  s2.setFrozenRows(1);
+  s2.autoResizeColumns(1, s2Headers.length);
+
+  // Sheet 3: สรุปรายชั้นปี
+  const s3 = ss.insertSheet("สรุปรายชั้นปี");
+  const yearStats = {};
+  assessments.forEach(function (a) {
+    const info = roster[a.studentId] || {};
+    const y = info.year ? String(info.year) : (String(a.studentId || "").substring(0, 2) || "อื่นๆ");
+    if (!yearStats[y]) yearStats[y] = { count: 0, students: {}, RED: 0, ORANGE: 0, YELLOW: 0, GREEN: 0 };
+    yearStats[y].count++;
+    yearStats[y].students[a.studentId] = true;
+    if (yearStats[y][a.level] !== undefined) yearStats[y][a.level]++;
+  });
+
+  const s3Headers = ["ชั้นปี/รุ่น", "จำนวนนักเรียน (คน)", "จำนวนครั้งที่ประเมิน", "🔴 RED", "🟠 ORANGE", "🟡 YELLOW", "🟢 GREEN", "รวมเคสต้องดูแล", "สัดส่วนต้องดูแล (%)"];
+  const s3Rows = [s3Headers];
+  Object.keys(yearStats).sort().forEach(function (yKey) {
+    const ys = yearStats[yKey];
+    const atRisk = ys.RED + ys.ORANGE + ys.YELLOW;
+    const stdCount = Object.keys(ys.students).length;
+    s3Rows.push([
+      yKey, stdCount, ys.count, ys.RED, ys.ORANGE, ys.YELLOW, ys.GREEN, atRisk,
+      stdCount ? (Math.round(atRisk / stdCount * 1000) / 10 + "%") : "-"
+    ]);
+  });
+  s3.getRange(1, 1, s3Rows.length, s3Headers.length).setValues(s3Rows);
+  s3.getRange(1, 1, 1, s3Headers.length).setFontWeight("bold").setBackground("#1B4332").setFontColor("#FFFFFF");
+  s3.setFrozenRows(1);
+  s3.autoResizeColumns(1, s3Headers.length);
+
+  // Sheet 4: รายการเคสกลุ่มเสี่ยง (RED / ORANGE / YELLOW)
+  const s4 = ss.insertSheet("กลุ่มเสี่ยงที่ต้องดูแล");
+  const riskList = assessments.filter(function (a) { return a.level === "RED" || a.level === "ORANGE" || a.level === "YELLOW"; });
+  const s4Headers = ["ระดับความเสี่ยง", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ST-5 (เครียด)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)", "ดัชนีกล้อง AI", "วันเวลาประเมิน", "เหตุผลข้อบ่งชี้", "สถานะการติดตาม"];
+  const s4Rows = [s4Headers];
+  riskList.forEach(function (a) {
+    const info = roster[a.studentId] || {};
+    const al = alerts[a.studentId] || {};
+    s4Rows.push([
+      a.level,
+      '="' + String(a.studentId) + '"',
+      info.name ? info.name : (a.name || "-"),
+      info.year ? info.year : "-",
+      a.st5 !== null && a.st5 !== undefined ? a.st5 : "-",
+      a.q9 !== null && a.q9 !== undefined ? a.q9 : "-",
+      a.q8 !== null && a.q8 !== undefined ? a.q8 : "-",
+      a.camIndex !== null && a.camIndex !== undefined ? a.camIndex : "-",
+      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
+      a.reason || "-",
+      al.status || "แจ้งแล้ว"
+    ]);
+  });
+  s4.getRange(1, 1, s4Rows.length, s4Headers.length).setValues(s4Rows);
+  s4.getRange(1, 1, 1, s4Headers.length).setFontWeight("bold").setBackground("#1B4332").setFontColor("#FFFFFF");
+  s4.setFrozenRows(1);
+  s4.autoResizeColumns(1, s4Headers.length);
+
   SpreadsheetApp.flush();
 
   // แปลงเป็น .xlsx ผ่าน Drive export URL
@@ -156,7 +255,7 @@ function exportReportToDrive(report) {
   const xlsxBlob = resp.getBlob().setName(title + ".xlsx");
   const file = folder.createFile(xlsxBlob);
 
-  // ลบ Google Sheet ต้นฉบับทิ้ง เหลือแต่ .xlsx ในโฟลเดอร์
+  // ลบ Google Sheet ชั่วคราวทิ้ง เหลือแต่ .xlsx สมบูรณ์ใน Drive
   DriveApp.getFileById(ssId).setTrashed(true);
   return file.getUrl();
 }
