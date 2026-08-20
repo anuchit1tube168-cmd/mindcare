@@ -411,7 +411,13 @@ function doGet(e) {
     );
   }
 
-  // 5. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive
+  // 5. ส่งผลประเมินส่วนตัวกลับไปยัง LINE ID ของนักเรียนทุกคนที่ผูกบัญชีไว้
+  if (action === "pushLineAll" || action === "sendLineToStudents") {
+    const result = pushResultsToAllStudentsLine(p.year);
+    return output(result);
+  }
+
+  // 6. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive
   if (action === "exportDrive" || action === "getReportUrl") {
     const res = exportReportNow(Number(p.days || 7));
     return output(res);
@@ -616,10 +622,130 @@ function handleSubmit(d) {
     alertId = createAlert(assessmentId, d, risk);
   }
 
-  // ส่งแจ้งเตือน Telegram ทุกครั้งที่มีการประเมิน
+  // 1. ส่งแจ้งเตือนอาจารย์ผ่าน Telegram ทุกครั้งที่มีการประเมิน
   notifyTeachers(alertId || "NORMAL", d, risk);
 
+  // 2. ส่งสรุปผลประเมินส่วนตัว + คำแนะนำกลับไปยัง LINE ของนักเรียนคนนั้นทันที (ถ้ามี LINE userId)
+  if (d.lineUserId) {
+    notifyStudentLine(d, risk);
+  }
+
   return { ok: true, assessmentId: assessmentId, riskLevel: risk.level, alertId: alertId };
+}
+
+/**
+ * ส่งผลประเมินส่วนตัวและคำแนะนำการดูแลใจกลับไปยัง LINE ของนักเรียน
+ */
+function notifyStudentLine(d, risk) {
+  if (!d.lineUserId) return;
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  if (!token) return;
+
+  const icon = risk.level === "RED" ? "🔴" : (risk.level === "ORANGE" ? "🟠" : (risk.level === "YELLOW" ? "🟡" : "🟢"));
+  const nameStr = d.displayName ? d.displayName : ("รหัส " + d.studentId);
+  const apiUrl = ScriptApp.getService().getUrl();
+
+  let advice = "";
+  if (risk.level === "GREEN") {
+    advice = "✨ ผลประเมินอยู่ในเกณฑ์ปกติ มีสุขภาวะทางใจที่ดี หมั่นพักผ่อนและดูแลสุขภาพอย่างสม่ำเสมอนะครับ";
+  } else if (risk.level === "YELLOW") {
+    advice = "🌿 ช่วงนี้อาจมีเรื่องตึงเครียดหรือเหนื่อยล้า แนะนำให้หาเวลาผ่อนคลาย หรือปรึกษาพูดคุยกับเพื่อน/อาจารย์ที่ปรึกษาได้เสมอนะครับ";
+  } else if (risk.level === "ORANGE") {
+    advice = "🧡 ระบบพบสัญญาณความเครียด/ความกังวลค่อนข้างสูง อาจารย์พร้อมรับฟังและให้คำปรึกษา แนะนำให้นัดหมายพูดคุยกับอาจารย์ที่ปรึกษานะครับ";
+  } else if (risk.level === "RED") {
+    advice = "🆘 ขอให้รู้ว่าน้องไม่ได้อยู่คนเดียว หากรู้สึกไม่ไหว โปรดติดต่ออาจารย์ผู้ดูแลทันที หรือสายด่วนสุขภาพจิต 1323 (โทรฟรี 24 ชม.)";
+  }
+
+  const text =
+    "🌸 [สรุปผลการประเมินสุขภาพใจของน้อง]\n" +
+    "ระบบดูแลใจ วิทยาลัยพยาบาลทหารอากาศ\n" +
+    "------------------------------------\n" +
+    "👤 นักเรียน: " + nameStr + " (" + d.studentId + ")\n" +
+    "📊 ผลการประเมิน: " + icon + " " + risk.level + "\n" +
+    "📝 รายละเอียดคะแนน:\n" +
+    " • ST-5 (ความเครียด): " + (d.st5Score !== null ? d.st5Score : "-") + "/15\n" +
+    " • 2Q (คัดกรอง): " + (d.q2Score !== null ? d.q2Score : "-") + "/2\n" +
+    (d.q9Score !== null && d.q9Score !== undefined ? (" • 9Q (ซึมเศร้า): " + d.q9Score + "/27\n") : "") +
+    (d.q8Score !== null && d.q8Score !== undefined ? (" • 8Q (ความเสี่ยง): " + d.q8Score + "/52\n") : "") +
+    "------------------------------------\n" +
+    advice + "\n\n" +
+    "📥 ดาวน์โหลดเอกสารผลประเมินของน้อง:\n" +
+    apiUrl + "?report=student&id=" + encodeURIComponent(d.studentId);
+
+  pushLineMessage(token, d.lineUserId, text);
+}
+
+/**
+ * ส่งผลประเมินย้อนหลังกลับไปยัง LINE ID ของนักเรียนทุกคนที่ผูกบัญชีไว้
+ */
+function pushResultsToAllStudentsLine(yearFilter) {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  if (!token) return { ok: false, error: "ไม่พบ LINE_CHANNEL_ACCESS_TOKEN" };
+
+  const data = loadAssessments();
+  const roster = rosterMap();
+  const bindSheet = getSheet(SHEETS.BINDINGS);
+  const bRows = bindSheet.getDataRange().getValues();
+
+  // สร้าง map: studentId -> lineUserId
+  const studentLineMap = {};
+  for (let i = 1; i < bRows.length; i++) {
+    const lineId = String(bRows[i][0]).trim();
+    const sId = String(bRows[i][1]).trim();
+    if (lineId && sId) studentLineMap[sId] = lineId;
+  }
+
+  // หานักเรียนที่มีผลประเมินล่าสุด
+  const latestAssessments = {};
+  data.forEach(function (a) {
+    if (!a.studentId) return;
+    if (!latestAssessments[a.studentId] || new Date(a.ts) > new Date(latestAssessments[a.studentId].ts)) {
+      latestAssessments[a.studentId] = a;
+    }
+  });
+
+  let sentCount = 0;
+  let skippedCount = 0;
+  const targetYear = (yearFilter || "").trim();
+
+  Object.keys(latestAssessments).forEach(function (sId) {
+    if (targetYear && sId.indexOf(targetYear) !== 0) return;
+    const lineUserId = studentLineMap[sId];
+    if (!lineUserId) {
+      skippedCount++;
+      return;
+    }
+
+    const a = latestAssessments[sId];
+    const info = roster[sId] || {};
+    const d = {
+      studentId: sId,
+      displayName: info.name || a.name || "-",
+      lineUserId: lineUserId,
+      st5Score: a.st5,
+      q2Score: a.q2,
+      q9Score: a.q9,
+      q8Score: a.q8
+    };
+    const risk = { level: a.level, reason: a.reason };
+
+    try {
+      notifyStudentLine(d, risk);
+      sentCount++;
+      Utilities.sleep(100); // เว้นระยะ 100ms เพื่อป้องกัน LINE API rate limit
+    } catch (err) {
+      logError("pushResultsToAllStudentsLine", err, sId);
+    }
+  });
+
+  return {
+    ok: true,
+    message: "ส่งข้อมูลผลประเมินไปยัง LINE ของนักเรียนเรียบร้อยแล้ว",
+    sentCount: sentCount,
+    noLineBindingCount: skippedCount
+  };
 }
 
 /**
