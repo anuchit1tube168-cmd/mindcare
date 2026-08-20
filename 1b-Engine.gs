@@ -149,12 +149,23 @@ function exportReportToDrive(report) {
   });
   s1.autoResizeColumns(1, 4);
 
-  // Sheet 2: รายงานรายบุคคลทุกคน (เรียงตามรหัส)
-  const s2 = ss.insertSheet("ผลประเมินรายคนทุกคน");
-  const assessments = loadAssessments();
+  // Sheet 2: รายงานผลประเมินรายคน (เฉพาะผลประเมินครั้งล่าสุดของแต่ละคน เรียงตามรหัส)
+  const s2 = ss.insertSheet("ผลประเมินรายคนล่าสุด");
+  const rawAssessments = loadAssessments();
   const roster = rosterMap();
   const alerts = alertStatusMap();
 
+  // ดึงเฉพาะผลล่าสุด 1 คน ต่อ 1 รายการ (Latest Record per Student)
+  const latestMap = {};
+  rawAssessments.forEach(function (a) {
+    if (!a.studentId) return;
+    const sId = String(a.studentId).trim();
+    if (!latestMap[sId] || new Date(a.ts) > new Date(latestMap[sId].ts)) {
+      latestMap[sId] = a;
+    }
+  });
+
+  const assessments = Object.values(latestMap);
   assessments.sort(function (a, b) {
     return String(a.studentId || "").localeCompare(String(b.studentId || ""));
   });
@@ -162,7 +173,7 @@ function exportReportToDrive(report) {
   const s2Headers = [
     "ลำดับ", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ระดับความเสี่ยง",
     "ST-5 (เครียด /15)", "2Q (คัดกรอง /2)", "9Q (ซึมเศร้า /27)", "8Q (ทำร้ายตนเอง /52)",
-    "ดัชนีกล้อง AI (/100)", "สัญญาณขัดแย้ง", "วันเวลาประเมิน", "เหตุผลการแปลผล", "สถานะติดตาม"
+    "ดัชนีกล้อง AI (/100)", "สัญญาณขัดแย้ง", "วันที่-เวลาทำล่าสุด", "เหตุผลการแปลผล", "สถานะติดตาม"
   ];
   const s2Rows = [s2Headers];
   assessments.forEach(function (a, idx) {
@@ -190,7 +201,7 @@ function exportReportToDrive(report) {
   s2.setFrozenRows(1);
   s2.autoResizeColumns(1, s2Headers.length);
 
-  // Sheet 3: สรุปรายชั้นปี
+  // Sheet 3: สรุปรายชั้นปี (จากผลล่าสุด)
   const s3 = ss.insertSheet("สรุปรายชั้นปี");
   const yearStats = {};
   assessments.forEach(function (a) {
@@ -202,14 +213,14 @@ function exportReportToDrive(report) {
     if (yearStats[y][a.level] !== undefined) yearStats[y][a.level]++;
   });
 
-  const s3Headers = ["ชั้นปี/รุ่น", "จำนวนนักเรียน (คน)", "จำนวนครั้งที่ประเมิน", "🔴 RED", "🟠 ORANGE", "🟡 YELLOW", "🟢 GREEN", "รวมเคสต้องดูแล", "สัดส่วนต้องดูแล (%)"];
+  const s3Headers = ["ชั้นปี/รุ่น", "จำนวนนักเรียนล่าสุด (คน)", "🔴 RED", "🟠 ORANGE", "🟡 YELLOW", "🟢 GREEN", "รวมเคสต้องดูแล", "สัดส่วนต้องดูแล (%)"];
   const s3Rows = [s3Headers];
   Object.keys(yearStats).sort().forEach(function (yKey) {
     const ys = yearStats[yKey];
     const atRisk = ys.RED + ys.ORANGE + ys.YELLOW;
     const stdCount = Object.keys(ys.students).length;
     s3Rows.push([
-      yKey, stdCount, ys.count, ys.RED, ys.ORANGE, ys.YELLOW, ys.GREEN, atRisk,
+      yKey, stdCount, ys.RED, ys.ORANGE, ys.YELLOW, ys.GREEN, atRisk,
       stdCount ? (Math.round(atRisk / stdCount * 1000) / 10 + "%") : "-"
     ]);
   });
@@ -218,10 +229,10 @@ function exportReportToDrive(report) {
   s3.setFrozenRows(1);
   s3.autoResizeColumns(1, s3Headers.length);
 
-  // Sheet 4: รายการเคสกลุ่มเสี่ยง (RED / ORANGE / YELLOW)
+  // Sheet 4: รายการเคสกลุ่มเสี่ยงล่าสุด (RED / ORANGE / YELLOW)
   const s4 = ss.insertSheet("กลุ่มเสี่ยงที่ต้องดูแล");
   const riskList = assessments.filter(function (a) { return a.level === "RED" || a.level === "ORANGE" || a.level === "YELLOW"; });
-  const s4Headers = ["ระดับความเสี่ยง", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ST-5 (เครียด)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)", "ดัชนีกล้อง AI", "วันเวลาประเมิน", "เหตุผลข้อบ่งชี้", "สถานะการติดตาม"];
+  const s4Headers = ["ระดับความเสี่ยง", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ST-5 (เครียด)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)", "ดัชนีกล้อง AI", "วันที่-เวลาทำล่าสุด", "เหตุผลข้อบ่งชี้", "สถานะการติดตาม"];
   const s4Rows = [s4Headers];
   riskList.forEach(function (a) {
     const info = roster[a.studentId] || {};

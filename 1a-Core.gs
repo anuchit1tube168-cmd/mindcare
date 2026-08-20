@@ -725,6 +725,7 @@ function generateStudentReportCsv(studentId) {
 
 /**
  * สร้างข้อมูล CSV รายงานตาม Timeline, ระดับความเสี่ยง, และ/หรือ ชั้นปี
+ * ดึงเฉพาะผลประเมินครั้งล่าสุดของแต่ละคน (Deduplicate per Student)
  */
 function generateReportCsv(filterLevel, filterYear, filterDays) {
   const data = loadAssessments();
@@ -733,7 +734,17 @@ function generateReportCsv(filterLevel, filterYear, filterDays) {
   const now = new Date();
   const since = filterDays ? new Date(now.getTime() - filterDays * 86400 * 1000) : null;
 
-  let filtered = data;
+  // 1. ดึงเฉพาะผลประเมินครั้งล่าสุด 1 คน ต่อ 1 รายการ
+  const latestMap = {};
+  data.forEach(function (a) {
+    if (!a.studentId) return;
+    const sId = String(a.studentId).trim();
+    if (!latestMap[sId] || new Date(a.ts) > new Date(latestMap[sId].ts)) {
+      latestMap[sId] = a;
+    }
+  });
+
+  let filtered = Object.values(latestMap);
   if (since) {
     filtered = filtered.filter(function (a) { return new Date(a.ts) >= since; });
   }
@@ -748,7 +759,7 @@ function generateReportCsv(filterLevel, filterYear, filterDays) {
     });
   }
 
-  // เรียงลำดับ: เรียงตามรหัสนักเรียนจากน้อยไปมาก (หรือหากเป็นรายงานชั้นปี ให้เรียงลำดับรหัส 7 หลักให้สวยงาม)
+  // เรียงลำดับ: เรียงตามรหัสนักเรียนจากน้อยไปมาก
   filtered.sort(function (a, b) {
     const idA = String(a.studentId || "").trim();
     const idB = String(b.studentId || "").trim();
@@ -758,7 +769,7 @@ function generateReportCsv(filterLevel, filterYear, filterDays) {
   const headers = [
     "ลำดับ", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ระดับความเสี่ยง",
     "ST-5 (เครียด)", "2Q (คัดกรอง)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)",
-    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "วันเวลาประเมิน", "เหตุผลการแปลผล", "สถานะติดตามงาน"
+    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "วันที่-เวลาทำล่าสุด", "เหตุผลการแปลผล", "สถานะติดตามงาน"
   ];
 
   const rows = [headers];
@@ -767,15 +778,15 @@ function generateReportCsv(filterLevel, filterYear, filterDays) {
     const al = alerts[a.studentId];
     rows.push([
       idx + 1,
-      '="' + String(a.studentId) + '"', // ใส่ ="6903946" เพื่อให้ Excel ไม่ตัดเลข 0 และไม่แปลงเป็น Scientific notation
+      '="' + String(a.studentId) + '"', // ใส่ ="6903946" เพื่อให้ Excel ไม่ตัดเลข 0
       '"' + (info && info.name ? info.name : (a.name || "-")) + '"',
       '"' + (info && info.year ? info.year : "-") + '"',
       a.level,
-      a.st5 !== null && a.st5 !== undefined ? a.st5 : "-",
-      a.q2 !== null && a.q2 !== undefined ? a.q2 : "-",
-      a.q9 !== null && a.q9 !== undefined ? a.q9 : "-",
-      a.q8 !== null && a.q8 !== undefined ? a.q8 : "-",
-      a.camIndex !== null && a.camIndex !== undefined ? a.camIndex : "-",
+      a.st5 !== null && a.st5 !== undefined && a.st5 !== "" ? a.st5 : "-",
+      a.q2 !== null && a.q2 !== undefined && a.q2 !== "" ? a.q2 : "-",
+      a.q9 !== null && a.q9 !== undefined && a.q9 !== "" ? a.q9 : "-",
+      a.q8 !== null && a.q8 !== undefined && a.q8 !== "" ? a.q8 : "-",
+      a.camIndex !== null && a.camIndex !== undefined && a.camIndex !== "" ? a.camIndex : "-",
       a.conflict ? "พบสัญญาณขัดแย้ง" : "ปกติ",
       Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
       '"' + String(a.reason || "").replace(/"/g, '""') + '"',
