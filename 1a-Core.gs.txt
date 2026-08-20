@@ -417,7 +417,34 @@ function doGet(e) {
     return output(result);
   }
 
-  // 6. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive
+  // 6. หน้าเว็บช่วยกรอก/บันทึก LINE_CHANNEL_ACCESS_TOKEN ได้โดยตรงอย่างง่ายดาย
+  if (action === "setToken" || action === "setupToken") {
+    if (p.token) {
+      PropertiesService.getScriptProperties().setProperty("LINE_CHANNEL_ACCESS_TOKEN", p.token.trim());
+      return HtmlService.createHtmlOutput(
+        '<body style="font-family:sans-serif; text-align:center; padding:40px; background:#F0FDF4;">' +
+        '<h2 style="color:#1B4332;">✅ บันทึก LINE Channel Access Token เรียบร้อยแล้ว!</h2>' +
+        '<p style="color:#4B5563;">ระบบพร้อมส่งแจ้งเตือนและ LINE Flex Message ให้นักเรียนทุกคนแล้วครับ</p>' +
+        '<a href="?action=pushLineAll" style="display:inline-block; margin-top:20px; padding:10px 20px; background:#1B4332; color:#fff; text-decoration:none; border-radius:8px; font-weight:bold;">📲 กดส่งผลเข้า LINE นักเรียนทุกคนทันที</a>' +
+        '</body>'
+      );
+    }
+    return HtmlService.createHtmlOutput(
+      '<body style="font-family:sans-serif; text-align:center; padding:40px; background:#F8FAFC;">' +
+      '<div style="max-width:500px; margin:0 auto; background:#fff; padding:30px; border-radius:12px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">' +
+      '<h2 style="color:#1E293B;">🔑 ตั้งค่า LINE Channel Access Token</h2>' +
+      '<p style="color:#64748B; font-size:14px;">วาง Token ที่คัดลอกมาจาก LINE Developers Console แล้วกดบันทึก</p>' +
+      '<form method="GET">' +
+      '<input type="hidden" name="action" value="setToken" />' +
+      '<textarea name="token" rows="6" style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #CBD5E1; border-radius:8px; font-family:monospace; font-size:12px;" placeholder="วาง Channel Access Token ที่นี่..." required></textarea>' +
+      '<button type="submit" style="margin-top:20px; width:100%; padding:12px; background:#059669; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:15px; cursor:pointer;">💾 บันทึก Token</button>' +
+      '</form>' +
+      '</div>' +
+      '</body>'
+    );
+  }
+
+  // 7. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive
   if (action === "exportDrive" || action === "getReportUrl") {
     const res = exportReportNow(Number(p.days || 7));
     return output(res);
