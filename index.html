@@ -634,12 +634,9 @@ async function initLiff() {
     liffState.ready = true;
     liffState.inClient = liff.isInClient();
 
-    // ถ้าเปิดผ่านลิงก์ LIFF บน External Browser แล้วยังไม่ได้ login -> สั่ง login ทันที
+    // บังคับล็อกอินผ่าน LINE เพื่อดึง Profile และ User ID
     if (!liff.isLoggedIn()) {
-      if (window.location.search.includes("liff.state") || window.location.href.includes("liff.line.me")) {
-        liff.login();
-        return;
-      }
+      liff.login();
       return;
     }
 
@@ -647,7 +644,7 @@ async function initLiff() {
     liffState.userId = profile.userId;
     liffState.displayName = profile.displayName;
 
-    // ผูก userId → รหัสนักเรียน ผ่าน backend
+    // บันทึก LINE userId ลง backend ทันทีที่เปิดหน้าเว็บสำเร็จ
     await resolveStudentId();
   } catch (err) {
     console.warn("LIFF init/profile ล้มเหลว:", err);

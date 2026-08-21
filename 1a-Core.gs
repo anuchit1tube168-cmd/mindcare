@@ -1237,8 +1237,6 @@ function handleResolveStudent(d) {
   }
 
   // ถ้าเป็นผู้ใช้ LINE ใหม่ที่เพิ่งเข้าสู่ระบบ -> บันทึก LINE userId ทันที (ยังไม่ผูกรหัส)
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
   try {
     const currentRows = sh.getDataRange().getValues();
     let exists = false;
@@ -1257,8 +1255,6 @@ function handleResolveStudent(d) {
     }
   } catch (e) {
     logError("handleResolveStudent.autoLog", e, d.lineUserId);
-  } finally {
-    lock.releaseLock();
   }
 
   return { ok: true, studentId: null, needBinding: true };
@@ -1324,29 +1320,19 @@ function handleBindStudent(d) {
     return { ok: false, error: "ไม่พบรหัสนี้ในทะเบียนนักเรียน กรุณาตรวจสอบหรือติดต่ออาจารย์" };
   }
 
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const sh = getSheet(SHEETS.BINDINGS);
-    const rows = sh.getDataRange().getValues();
-    for (let i = 1; i < rows.length; i++) {
-      // รหัสนี้ถูกผูกกับ LINE อื่นไปแล้ว
-      if (String(rows[i][1]).trim() === studentId && String(rows[i][0]) !== String(d.lineUserId)) {
-        return { ok: false, error: "รหัสนี้ถูกผูกกับบัญชี LINE อื่นแล้ว หากเป็นความผิดพลาดโปรดติดต่ออาจารย์" };
-      }
-      // LINE นี้เคยผูกไว้แล้ว → อัปเดตเป็นรหัสใหม่
-      if (String(rows[i][0]) === String(d.lineUserId)) {
-        sh.getRange(i + 1, 2).setValue(studentId);
-        sh.getRange(i + 1, 3).setValue(new Date());
-        return { ok: true, studentId: studentId, name: found.name, updated: true };
-      }
+  const sh = getSheet(SHEETS.BINDINGS);
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    // LINE นี้เคยผูกไว้แล้ว → อัปเดตเป็นรหัสใหม่
+    if (String(rows[i][0]).trim() === String(d.lineUserId).trim()) {
+      sh.getRange(i + 1, 2).setValue(studentId);
+      sh.getRange(i + 1, 3).setValue(new Date());
+      return { ok: true, studentId: studentId, updated: true };
     }
-    // ผูกใหม่
-    sh.appendRow([d.lineUserId, studentId, new Date()]);
-    return { ok: true, studentId: studentId, name: found.name };
-  } finally {
-    lock.releaseLock();
   }
+  // ผูกใหม่
+  sh.appendRow([d.lineUserId, studentId, new Date()]);
+  return { ok: true, studentId: studentId };
 }
 
 function appendAssessment(assessmentId, d, risk) {
