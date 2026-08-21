@@ -107,6 +107,18 @@ function doPost(e) {
  */
 function handleTelegramWebhook(update) {
   try {
+    if (!update) return;
+
+    // 0. ป้องกัน Telegram ส่ง Webhook ซ้ำ (Deduplicate update_id)
+    const updateId = update.update_id ? String(update.update_id) : null;
+    if (updateId) {
+      const cache = CacheService.getScriptCache();
+      if (cache.get("tg_upd_" + updateId)) {
+        return; // เคยประมวลผลแล้ว ข้ามทันที ไม่ส่งซ้ำ
+      }
+      cache.put("tg_upd_" + updateId, "1", 600); // จำไว้ 10 นาที
+    }
+
     const msg = update.message || (update.callback_query && update.callback_query.message);
     if (!msg) return;
     const chatId = msg.chat.id;
