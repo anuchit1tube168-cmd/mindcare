@@ -335,15 +335,12 @@ function getReport(days) {
  * ========================================================== */
 
 function getActiveSpreadsheet() {
-  let ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) {
-    const props = PropertiesService.getScriptProperties();
-    const sheetId = props.getProperty("SPREADSHEET_ID") || "1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ";
-    if (sheetId) {
-      try { ss = SpreadsheetApp.openById(sheetId); } catch (e) {}
-    }
+  const targetId = "1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ";
+  try {
+    return SpreadsheetApp.openById(targetId);
+  } catch (e) {
+    return SpreadsheetApp.getActiveSpreadsheet();
   }
-  return ss;
 }
 
 /** รันครั้งเดียวตอนติดตั้ง: สร้างชีตและหัวตารางทั้งหมด */

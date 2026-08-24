@@ -474,6 +474,11 @@ function doGet(e) {
 
   // 2.1 ตรวจสอบสถานะการผูก LINE ID และทะเบียนนักเรียน
   if (action === "debugBindings" || action === "checkBindings") {
+    const ss = getActiveSpreadsheet();
+    const allSheets = ss.getSheets().map(function(s) {
+      return { name: s.getName(), rows: s.getLastRow(), cols: s.getLastColumn() };
+    });
+
     const bindRows = getSheet(SHEETS.BINDINGS).getDataRange().getValues();
     const rosterRows = getSheet(SHEETS.ROSTER).getDataRange().getValues();
     const assessRows = getSheet(SHEETS.ASSESSMENTS).getDataRange().getValues();
@@ -485,11 +490,15 @@ function doGet(e) {
 
     return output({
       ok: true,
+      spreadsheetId: ss.getId(),
+      allSheetsInFile: allSheets,
       totalBindingsInSheet: bindRows.length - 1,
       totalRoster: rosterRows.length - 1,
       totalAssessments: assessRows.length - 1,
       assessmentsWithLineId: assessWithLine,
-      sampleBindings: bindRows.slice(1, 10).map(function(r) { return { lineId: r[0], studentId: r[1] }; })
+      sampleAssessmentsTop5: assessRows.slice(Math.max(1, assessRows.length - 5)).map(function(r) {
+        return { date: r[0], id: r[2], name: r[16], risk: r[13], st5: r[4] };
+      })
     });
   }
 
@@ -597,6 +606,68 @@ function doGet(e) {
       '</script>' +
       '</body>'
     );
+  }
+
+  // 6.0 คำสั่งย้ายและซิงค์ข้อมูลทั้งหมด 262 รายการจากชีตเดิมเข้าสู่ชีตหลักนี้
+  if (action === "migrateData" || action === "syncAllData") {
+    const srcSs = SpreadsheetApp.openById("1iVop4KAdgMFxcoGe3qbjI5-zDPo1jPllTeDx_7Xdjh4");
+    const dstSs = SpreadsheetApp.openById("1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ");
+    
+    const srcAssess = srcSs.getSheetByName("Assessments").getDataRange().getValues();
+    const dstAssess = dstSs.getSheetByName("Assessments");
+    
+    // เติมข้อมูลที่ยังไม่มี
+    const existingAssess = dstAssess.getDataRange().getValues();
+    const existingIds = {};
+    for (let e = 1; e < existingAssess.length; e++) {
+      existingIds[String(existingAssess[e][1]).trim()] = true;
+    }
+    
+    let addedCount = 0;
+    for (let s = 1; s < srcAssess.length; s++) {
+      const aId = String(srcAssess[s][1]).trim();
+      if (!existingIds[aId]) {
+        dstAssess.appendRow(srcAssess[s]);
+        addedCount++;
+      }
+    }
+    
+    // ซิงค์ Alerts
+    const srcAlerts = srcSs.getSheetByName("Alerts").getDataRange().getValues();
+    const dstAlerts = dstSs.getSheetByName("Alerts");
+    const existingAl = dstAlerts.getDataRange().getValues();
+    const exAlIds = {};
+    for (let a = 1; a < existingAl.length; a++) exAlIds[String(existingAl[a][1]).trim()] = true;
+    for (let sa = 1; sa < srcAlerts.length; sa++) {
+      const alId = String(srcAlerts[sa][1]).trim();
+      if (!exAlIds[alId]) dstAlerts.appendRow(srcAlerts[sa]);
+    }
+    
+    // สร้างแท็บรายงานใหม่ทั้งหมด
+    buildAllSheetReports();
+    
+    return output({
+      ok: true,
+      message: "ซิงค์ข้อมูลครบถ้วนเข้าสู่ Google Sheet เรียบร้อยแล้ว",
+      addedAssessments: addedCount,
+      totalAssessmentsInSheet: dstAssess.getLastRow() - 1,
+      sheetUrl: "https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit"
+    });
+  }
+
+  // 6.1 คำสั่งสั่งอัปเดตแท็บรายงานทั้งหมดใน Google Sheet ทันที (สร้างชีตสรุปรายชั้นปี, รายบุคคล, กลุ่มเสี่ยง)
+  if (action === "rebuildSheets" || action === "buildReports" || action === "updateReports") {
+    const y = buildYearReport();
+    const pCount = buildPersonReport();
+    const r = buildRiskReport();
+    return output({
+      ok: true,
+      message: "อัปเดตแท็บรายงานใน Google Sheet สำเร็จเรียบร้อยแล้ว",
+      yearGroups: y,
+      students: pCount,
+      riskCases: r,
+      sheetUrl: "https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit"
+    });
   }
 
   // 7. ขอไฟล์เอกสารรายงาน Excel (.xlsx) ที่จัดเก็บใน Google Drive

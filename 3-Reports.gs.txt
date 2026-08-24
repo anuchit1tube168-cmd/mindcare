@@ -70,18 +70,18 @@ function loadAssessments() {
   return out;
 }
 
-/** เขียนตารางลงชีตแบบ batch (เร็วกว่าเขียนทีละแถวมาก) */
+/** เขียนตารางลงชีตแบบมาตรฐาน OBE Military Docs (RTAF Professional Styling) */
 function writeReportSheet(sheetName, title, header, rows) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getActiveSpreadsheet();
+  if (!ss) throw new Error("ไม่สามารถเปิด Spreadsheet ได้");
   let sh = ss.getSheetByName(sheetName);
   if (!sh) sh = ss.insertSheet(sheetName);
   sh.clear();
 
-  const stamp = "สร้างเมื่อ " +
-    Utilities.formatDate(new Date(), "Asia/Bangkok", "dd/MM/yyyy HH:mm");
+  const stamp = "ข้อมูลระบบดูแลใจ วพอ.พอ. | ประมวลผลล่าสุด ณ วันที่ " +
+    Utilities.formatDate(new Date(), "Asia/Bangkok", "dd/MM/yyyy เวลา HH:mm น.");
   const table = [[title], [stamp], header].concat(rows.length ? rows : [["(ยังไม่มีข้อมูล)"]]);
 
-  // ทำให้ทุกแถวยาวเท่ากัน ไม่งั้น setValues จะ error
   const width = header.length;
   const padded = table.map(function (r) {
     const copy = r.slice(0, width);
@@ -89,12 +89,64 @@ function writeReportSheet(sheetName, title, header, rows) {
     return copy;
   });
 
-  sh.getRange(1, 1, padded.length, width).setValues(padded);
-  sh.getRange(1, 1, 1, width).merge().setFontWeight("bold").setFontSize(13);
-  sh.getRange(2, 1, 1, width).merge().setFontColor("#666666").setFontSize(10);
+  const totalRows = padded.length;
+  const range = sh.getRange(1, 1, totalRows, width);
+  range.setValues(padded);
+
+  // ตั้งค่าฟอนต์มาตรฐาน Sarabun / สารบรรณ
+  range.setFontFamily("Sarabun");
+
+  // หัวเรื่องหลัก (Row 1) - สีกรมท่าทหารอากาศ (RTAF Navy #1F3864)
+  sh.getRange(1, 1, 1, width)
+    .merge()
+    .setFontWeight("bold")
+    .setFontSize(14)
+    .setBackground("#1F3864")
+    .setFontColor("#FFFFFF")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sh.setRowHeight(1, 38);
+
+  // คำอธิบายเวลา (Row 2) - สีเทาสะอาดตา
+  sh.getRange(2, 1, 1, width)
+    .merge()
+    .setFontColor("#334155")
+    .setFontSize(10)
+    .setBackground("#F1F5F9")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sh.setRowHeight(2, 24);
+
+  // หัวตารางคอลัมน์ (Row 3) - สีกรมท่าสว่าง (#2E75B6 / #1B4332)
   sh.getRange(3, 1, 1, width)
-    .setFontWeight("bold").setBackground("#1B4332").setFontColor("#FFFFFF")
-    .setWrap(true).setVerticalAlignment("middle");
+    .setFontWeight("bold")
+    .setFontSize(11)
+    .setBackground("#2E75B6")
+    .setFontColor("#FFFFFF")
+    .setWrap(true)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sh.setRowHeight(3, 32);
+
+  // ข้อมูลแถว (Rows 4 เป็นต้นไป)
+  if (totalRows > 3) {
+    const dataRange = sh.getRange(4, 1, totalRows - 3, width);
+    dataRange.setFontSize(10).setVerticalAlignment("middle");
+    sh.setRowHeights(4, totalRows - 3, 24);
+
+    // เส้นขอบตาราง (Borders)
+    dataRange.setBorder(true, true, true, true, true, true, "#CBD5E1", SpreadsheetApp.BorderStyle.SOLID);
+
+    // สลับสีแถว (Zebra striping)
+    for (let r = 4; r <= totalRows; r++) {
+      if (r % 2 === 0) {
+        sh.getRange(r, 1, 1, width).setBackground("#F8FAFC");
+      } else {
+        sh.getRange(r, 1, 1, width).setBackground("#FFFFFF");
+      }
+    }
+  }
+
   sh.setFrozenRows(3);
   sh.autoResizeColumns(1, width);
   return sh;
@@ -105,10 +157,14 @@ function buildYearReport() {
   const data = loadAssessments();
   const roster = rosterMap();
   const byYear = {};
+  const yearNames = { "69": "ชั้นปีที่ 1 (รุ่น 69)", "68": "ชั้นปีที่ 2 (รุ่น 68)", "67": "ชั้นปีที่ 3 (รุ่น 67)", "66": "ชั้นปีที่ 4 (รุ่น 66)" };
 
   data.forEach(function (a) {
     const info = roster[a.studentId];
-    const year = info && info.year ? info.year : (a.userType === "student" ? "ไม่ระบุชั้นปี" : "บุคลากร/บุคคลภายนอก");
+    const sId = String(a.studentId || "").trim();
+    const prefix = sId.length >= 2 ? sId.substring(0, 2) : "";
+    const year = (info && info.year) ? info.year : (yearNames[prefix] || (prefix ? ("รุ่น " + prefix) : (a.userType === "student" ? "ไม่ระบุชั้นปี" : "บุคลากร/บุคคลภายนอก")));
+
     if (!byYear[year]) {
       byYear[year] = { times: 0, people: {}, RED: 0, ORANGE: 0, YELLOW: 0, GREEN: 0,
                        conflict: 0, camSum: 0, camN: 0 };
@@ -124,18 +180,19 @@ function buildYearReport() {
   const rows = Object.keys(byYear).sort().map(function (year) {
     const y = byYear[year];
     const need = y.RED + y.ORANGE + y.YELLOW;
+    const count = Object.keys(y.people).length;
     return [
-      year, Object.keys(y.people).length, y.times,
+      year, count, y.times,
       y.RED, y.ORANGE, y.YELLOW, y.GREEN, need,
-      y.times ? Math.round(need / y.times * 1000) / 10 + "%" : "-",
+      count ? Math.round(need / count * 1000) / 10 + "%" : "-",
       y.conflict,
       y.camN ? Math.round(y.camSum / y.camN * 10) / 10 : "-",
     ];
   });
 
   writeReportSheet(SHEETS.RPT_YEAR, "รายงานสรุปแยกชั้นปี — ระบบดูแลใจ วพอ.พอ.",
-    ["ชั้นปี", "จำนวนคนที่ทำ", "จำนวนครั้ง", "แดง", "ส้ม", "เหลือง", "เขียว",
-     "รวมต้องดูแล", "สัดส่วนต้องดูแล", "สัญญาณกล้องขัดแย้ง", "ดัชนีกล้องเฉลี่ย"],
+    ["ชั้นปี", "จำนวนคนที่ทำ (คน)", "จำนวนครั้งทั้งหมด", "🔴 แดง", "🟠 ส้ม", "🟡 เหลือง", "🟢 เขียว",
+     "รวมกลุ่มต้องดูแล (คน)", "สัดส่วนต้องดูแล (%)", "สัญญาณกล้องขัดแย้ง (เคส)", "ดัชนีกล้องเฉลี่ย"],
     rows);
   return rows.length;
 }
@@ -146,6 +203,7 @@ function buildPersonReport() {
   const roster = rosterMap();
   const alerts = alertStatusMap();
   const byPerson = {};
+  const yearNames = { "69": "ปี 1 (รุ่น 69)", "68": "ปี 2 (รุ่น 68)", "67": "ปี 3 (รุ่น 67)", "66": "ปี 4 (รุ่น 66)" };
 
   data.forEach(function (a) {
     if (!byPerson[a.studentId]) {
@@ -153,15 +211,14 @@ function buildPersonReport() {
     }
     const p = byPerson[a.studentId];
     p.times++;
-    if (!p.last || a.ts > p.last.ts) p.last = a;
+    if (!p.last || new Date(a.ts) > new Date(p.last.ts)) p.last = a;
     if (riskRank(a.level) > riskRank(p.maxLevel)) p.maxLevel = a.level;
     if (a.name) p.nameFromForm = a.name;
   });
 
-  // เรียงก่อนด้วยค่าดิบ (รุนแรงสุดขึ้นก่อน) แล้วจึงแปลงเป็นข้อความไทย
+  // เรียงลำดับ: นำคนที่เพิ่งทำล่าสุดขึ้นก่อน (Timeline ล่าสุดอยู่ด้านบน)
   const ordered = Object.keys(byPerson).sort(function (a, b) {
-    const d = riskRank(byPerson[b].maxLevel) - riskRank(byPerson[a].maxLevel);
-    return d !== 0 ? d : String(a).localeCompare(String(b));
+    return new Date(byPerson[b].last.ts) - new Date(byPerson[a].last.ts);
   });
 
   const rows = ordered.map(function (id) {
@@ -169,28 +226,33 @@ function buildPersonReport() {
     const info = roster[id];
     const last = p.last;
     const al = alerts[id];
+    const sId = String(id).trim();
+    const prefix = sId.length >= 2 ? sId.substring(0, 2) : "";
+    const derivedYear = (info && info.year) ? info.year : (yearNames[prefix] || (prefix ? ("รุ่น " + prefix) : (last.userType === "student" ? "-" : "บุคลากร/ภายนอก")));
+
     return [
-      id,
+      '="' + sId + '"',
       info && info.name ? info.name : (p.nameFromForm || "(ไม่พบในทะเบียน)"),
-      info && info.year ? info.year : (last.userType === "student" ? "-" : "บุคลากร/ภายนอก"),
-      p.times,
+      derivedYear,
       Utilities.formatDate(new Date(last.ts), "Asia/Bangkok", "dd/MM/yyyy HH:mm"),
       riskThai(last.level),
       riskThai(p.maxLevel),
       last.st5 === "" ? "-" : last.st5,
+      last.q2 === "" ? "-" : last.q2,
       last.q9 === "" ? "-" : last.q9,
       last.q8 === "" ? "-" : last.q8,
       typeof last.camIndex === "number" ? last.camIndex : "-",
-      last.conflict ? "ใช่" : "",
-      al ? al.status : "",
-      al ? al.note : "",
+      last.conflict ? "ใช่" : "-",
+      p.times,
+      al ? al.status : "-",
+      al ? al.note : "-",
     ];
   });
 
-  writeReportSheet(SHEETS.RPT_PERSON, "รายงานรายบุคคล — ระบบดูแลใจ (ข้อมูลอ่อนไหว จำกัดสิทธิ์เข้าถึง)",
-    ["รหัส/ผู้ใช้", "ชื่อ", "ชั้นปี", "จำนวนครั้ง", "ทำล่าสุด", "ระดับล่าสุด",
-     "ระดับสูงสุดที่เคยพบ", "ST-5", "9Q", "8Q", "ดัชนีกล้อง", "สัญญาณขัดแย้ง",
-     "สถานะติดตาม", "บันทึกการดูแล"],
+  writeReportSheet(SHEETS.RPT_PERSON, "รายงานรายบุคคลล่าสุด — ระบบดูแลใจ วพอ.พอ. (เปรียบเทียบผลประเมิน)",
+    ["รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "วันเวลาทำล่าสุด", "ระดับล่าสุด",
+     "ระดับสูงสุดที่เคยพบ", "ST-5", "2Q", "9Q", "8Q", "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง",
+     "จำนวนครั้งที่ทำ", "สถานะติดตามงาน", "บันทึกการดูแล"],
     rows);
   return rows.length;
 }
