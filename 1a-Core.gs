@@ -771,28 +771,33 @@ function generateReportCsv(filterLevel, filterYear, filterDays) {
     });
   }
 
-  // เรียงลำดับ: เรียงตามรหัสนักเรียนจากน้อยไปมาก
+  // เรียงลำดับ: นำคนที่ทำล่าสุดขึ้นก่อน (Timeline ล่าสุดอยู่ด้านบน)
   filtered.sort(function (a, b) {
-    const idA = String(a.studentId || "").trim();
-    const idB = String(b.studentId || "").trim();
-    return idA.localeCompare(idB);
+    return new Date(b.ts) - new Date(a.ts);
   });
 
   const headers = [
-    "ลำดับ", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ระดับความเสี่ยง",
+    "ลำดับ", "วันที่-เวลาทำล่าสุด", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "ชั้นปี/รุ่น", "ระดับความเสี่ยง",
     "ST-5 (เครียด)", "2Q (คัดกรอง)", "9Q (ซึมเศร้า)", "8Q (ทำร้ายตนเอง)",
-    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "วันที่-เวลาทำล่าสุด", "เหตุผลการแปลผล", "สถานะติดตามงาน"
+    "ดัชนีกล้อง AI", "สัญญาณขัดแย้ง", "เหตุผลการแปลผล", "สถานะติดตามงาน"
   ];
+
+  const yearMapName = { "69": "ปี 1 (รุ่น 69)", "68": "ปี 2 (รุ่น 68)", "67": "ปี 3 (รุ่น 67)", "66": "ปี 4 (รุ่น 66)" };
 
   const rows = [headers];
   filtered.forEach(function (a, idx) {
     const info = roster[a.studentId];
     const al = alerts[a.studentId];
+    const sIdStr = String(a.studentId || "").trim();
+    const prefix = sIdStr.length >= 2 ? sIdStr.substring(0, 2) : "";
+    const derivedYear = (info && info.year) ? info.year : (yearMapName[prefix] || (prefix ? ("รุ่น " + prefix) : "-"));
+
     rows.push([
       idx + 1,
-      '="' + String(a.studentId) + '"', // ใส่ ="6903946" เพื่อให้ Excel ไม่ตัดเลข 0
+      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
+      '="' + sIdStr + '"', // ใส่ ="6903946" เพื่อให้ Excel ไม่ตัดเลข 0
       '"' + (info && info.name ? info.name : (a.name || "-")) + '"',
-      '"' + (info && info.year ? info.year : "-") + '"',
+      '"' + derivedYear + '"',
       a.level,
       a.st5 !== null && a.st5 !== undefined && a.st5 !== "" ? a.st5 : "-",
       a.q2 !== null && a.q2 !== undefined && a.q2 !== "" ? a.q2 : "-",
@@ -800,7 +805,6 @@ function generateReportCsv(filterLevel, filterYear, filterDays) {
       a.q8 !== null && a.q8 !== undefined && a.q8 !== "" ? a.q8 : "-",
       a.camIndex !== null && a.camIndex !== undefined && a.camIndex !== "" ? a.camIndex : "-",
       a.conflict ? "พบสัญญาณขัดแย้ง" : "ปกติ",
-      Utilities.formatDate(new Date(a.ts), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
       '"' + String(a.reason || "").replace(/"/g, '""') + '"',
       al ? al.status : "-"
     ]);
