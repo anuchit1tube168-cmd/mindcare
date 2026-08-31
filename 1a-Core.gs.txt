@@ -608,6 +608,197 @@ function doGet(e) {
     );
   }
 
+  // 6.01 ตรวจสอบรายชื่อนักเรียนที่ยังไม่ได้ทำแบบประเมิน แยกตามชั้นปี ๑-๔
+  if (action === "missingStudents" || action === "checkMissing" || action === "uncompleted") {
+    const ss = getActiveSpreadsheet();
+    const assessRows = getSheet(SHEETS.ASSESSMENTS).getDataRange().getValues();
+    
+    // เก็บรหัสและชื่อของคนที่ทำแล้ว
+    const completedMap = {};
+    for (let a = 1; a < assessRows.length; a++) {
+      const sId = String(assessRows[a][2] || "").trim();
+      const sName = String(assessRows[a][16] || "").trim();
+      if (sId) completedMap[sId] = true;
+      if (sName) completedMap[sName] = true;
+    }
+
+    const yearSheets = [
+      { sheetName: "ทะเบียน ปี 1", yearName: "ชั้นปีที่ ๑ (รุ่น ๖๙)", codePrefix: "69" },
+      { sheetName: "ทะเบียน ปี 2", yearName: "ชั้นปีที่ ๒ (รุ่น ๖๘)", codePrefix: "68" },
+      { sheetName: "ทะเบียน ปี 3", yearName: "ชั้นปีที่ ๓ (รุ่น ๖๗)", codePrefix: "67" },
+      { sheetName: "ทะเบียน ปี 4", yearName: "ชั้นปีที่ ๔ (รุ่น ๖๖)", codePrefix: "66" }
+    ];
+
+    const result = {
+      ok: true,
+      totalAssessments: assessRows.length - 1,
+      totalCompletedUnique: Object.keys(completedMap).length,
+      byYear: {}
+    };
+
+    let grandTotalRoster = 0;
+    let grandTotalMissing = 0;
+
+    yearSheets.forEach(function(y) {
+      const sh = ss.getSheetByName(y.sheetName);
+      if (!sh) return;
+      const rows = sh.getDataRange().getValues();
+      const rosterList = [];
+      const missingList = [];
+      const doneList = [];
+
+      // หา header column
+      let idCol = 1; // Default col B
+      let nameCol = 2; // Default col C
+
+      for (let r = 0; r < rows.length; r++) {
+        for (let c = 0; c < rows[r].length; c++) {
+          const val = String(rows[r][c] || "").trim();
+          if (val.indexOf("รหัสประจำตัว") !== -1 || val.indexOf("รหัส") !== -1) idCol = c;
+          if (val.indexOf("ชื่อ") !== -1 || val.indexOf("ยศ-ชื่อ") !== -1) nameCol = c;
+        }
+        if (rows[r][0] === "ลำดับ" || rows[r][1] === "รหัสประจำตัว") {
+          // Found header
+          break;
+        }
+      }
+
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const sId = String(row[idCol] || "").trim();
+        const sName = String(row[nameCol] || "").trim();
+        
+        // ข้ามแถว header หรือแถวว่าง
+        if (!sId || sId === "รหัสประจำตัว" || sId.length < 5 || isNaN(Number(sId.substring(0, 2)))) continue;
+
+        const stuObj = {
+          studentId: sId,
+          name: sName,
+          gender: row[4] || "-",
+          section: row[3] || "-"
+        };
+        rosterList.push(stuObj);
+
+        // เช็คว่าทำหรือยัง
+        if (completedMap[sId] || (sName && completedMap[sName])) {
+          doneList.push(stuObj);
+        } else {
+          missingList.push(stuObj);
+        }
+      }
+
+      grandTotalRoster += rosterList.length;
+      grandTotalMissing += missingList.length;
+
+      result.byYear[y.yearName] = {
+        totalRoster: rosterList.length,
+        completedCount: doneList.length,
+        missingCount: missingList.length,
+        completionRate: rosterList.length ? (Math.round(doneList.length / rosterList.length * 1000) / 10 + "%") : "0%",
+        missingStudents: missingList
+      };
+    });
+
+    result.grandTotalRoster = grandTotalRoster;
+    result.grandTotalMissing = grandTotalMissing;
+    result.grandTotalCompleted = grandTotalRoster - grandTotalMissing;
+    result.overallCompletionRate = grandTotalRoster ? (Math.round((grandTotalRoster - grandTotalMissing) / grandTotalRoster * 1000) / 10 + "%") : "0%";
+
+    if (p.format === "json") {
+      return output(result);
+    }
+
+    // สร้างหน้า Web Dashboard แสดงผลอย่างสวยงามแบบมืออาชีพ
+    let html = '<!DOCTYPE html>' +
+      '<html lang="th">' +
+      '<head>' +
+      '<meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+      '<title>รายชื่อ นพอ. ที่ยังไม่ได้ทำแบบประเมิน | ระบบดูแลใจ วพอ.พอ.</title>' +
+      '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">' +
+      '<style>' +
+      '* { box-sizing: border-box; margin: 0; padding: 0; }' +
+      'body { font-family: "Sarabun", sans-serif; background: #F1F5F9; color: #1E293B; padding: 20px 12px; }' +
+      '.container { max-width: 900px; margin: 0 auto; }' +
+      '.header-card { background: linear-gradient(135deg, #1F3864 0%, #2E75B6 100%); color: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(31, 56, 100, 0.2); text-align: center; margin-bottom: 20px; }' +
+      '.header-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }' +
+      '.header-card p { font-size: 14px; opacity: 0.9; }' +
+      '.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }' +
+      '.stat-card { background: #fff; padding: 16px 12px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #E2E8F0; }' +
+      '.stat-card .val { font-size: 24px; font-weight: 700; color: #1F3864; margin-top: 4px; }' +
+      '.stat-card.red .val { color: #DC2626; }' +
+      '.stat-card.green .val { color: #16A34A; }' +
+      '.stat-card .lbl { font-size: 13px; color: #64748B; }' +
+      '.year-card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #E2E8F0; }' +
+      '.year-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #F1F5F9; padding-bottom: 12px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }' +
+      '.year-title { font-size: 17px; font-weight: 700; color: #1F3864; }' +
+      '.badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }' +
+      '.badge.warn { background: #FEF2F2; color: #DC2626; border: 1px solid #FCA5A5; }' +
+      '.badge.ok { background: #F0FDF4; color: #16A34A; border: 1px solid #86EFAC; }' +
+      'table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }' +
+      'th { background: #F8FAFC; color: #475569; text-align: left; padding: 10px; font-weight: 600; border-bottom: 1px solid #E2E8F0; }' +
+      'td { padding: 10px; border-bottom: 1px solid #F1F5F9; color: #334155; }' +
+      'tr:hover { background: #F8FAFC; }' +
+      '.btn-group { display: flex; justify-content: center; gap: 10px; margin-top: 24px; flex-wrap: wrap; }' +
+      '.btn { display: inline-flex; align-items: center; justify-content: center; padding: 12px 20px; border-radius: 10px; font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer; border: none; transition: 0.2s; }' +
+      '.btn-primary { background: #1F3864; color: #fff; }' +
+      '.btn-primary:hover { background: #152644; }' +
+      '.btn-outline { background: #fff; color: #1F3864; border: 1px solid #CBD5E1; }' +
+      '</style>' +
+      '</head>' +
+      '<body>' +
+      '<div class="container">' +
+      '<div class="header-card">' +
+      '<h1>📋 ติดตามการทำแบบประเมินสุขภาพใจ นพอ.</h1>' +
+      '<p>วิทยาลัยพยาบาลทหารอากาศ กรมแพทย์ทหารอากาศ</p>' +
+      '</div>' +
+      '<div class="stats-grid">' +
+      '<div class="stat-card"><div class="lbl">นพอ. ในทะเบียนทั้งหมด</div><div class="val">' + result.grandTotalRoster + ' <span style="font-size:14px;font-weight:normal;">นาย</span></div></div>' +
+      '<div class="stat-card green"><div class="lbl">ทำแบบประเมินแล้ว</div><div class="val">' + result.grandTotalCompleted + ' <span style="font-size:14px;font-weight:normal;">นาย</span></div></div>' +
+      '<div class="stat-card red"><div class="lbl">ยังไม่ได้ทำ</div><div class="val">' + result.grandTotalMissing + ' <span style="font-size:14px;font-weight:normal;">นาย</span></div></div>' +
+      '<div class="stat-card"><div class="lbl">อัตราความสำเร็จ</div><div class="val">' + result.overallCompletionRate + '</div></div>' +
+      '</div>';
+
+    Object.keys(result.byYear).forEach(function(yName) {
+      const yData = result.byYear[yName];
+      html += '<div class="year-card">' +
+        '<div class="year-header">' +
+        '<div class="year-title">🎓 ' + yName + '</div>' +
+        '<div class="badge ' + (yData.missingCount > 0 ? 'warn' : 'ok') + '">' +
+        (yData.missingCount > 0 ? ('ขาดอีก ' + yData.missingCount + ' นาย (' + yData.completionRate + ')') : 'ครบ 100%') +
+        '</div>' +
+        '</div>';
+
+      if (yData.missingStudents.length === 0) {
+        html += '<p style="color:#16A34A; text-align:center; padding:12px 0;">🎉 นพอ. ในชั้นปีนี้ทำแบบประเมินครบถ้วน 100% แล้ว</p>';
+      } else {
+        html += '<table>' +
+          '<thead><tr><th style="width:60px;text-align:center;">ลำดับ</th><th style="width:120px;">รหัสประจำตัว</th><th>ยศ-ชื่อ-สกุล</th></tr></thead>' +
+          '<tbody>';
+        yData.missingStudents.forEach(function(s, idx) {
+          html += '<tr>' +
+            '<td style="text-align:center;color:#64748B;">' + (idx + 1) + '</td>' +
+            '<td style="font-weight:600;color:#1F3864;">' + s.studentId + '</td>' +
+            '<td>' + s.name + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+    });
+
+    html += '<div class="btn-group">' +
+      '<a href="https://docs.google.com/spreadsheets/d/1WoR9gqLx745Yyz_Ls415ttRVAE_1ZWkC3BYNDlt53kQ/edit" target="_blank" class="btn btn-primary">📊 เปิด Google Sheet บันทึกผล</a>' +
+      '<a href="https://liff.line.me/2010984231-Z7kbSIPp" target="_blank" class="btn btn-outline">🌐 ลิงก์แบบประเมิน (LIFF)</a>' +
+      '</div>' +
+      '<p style="text-align:center; margin-top:20px; font-size:12px; color:#94A3B8;">ระบบดูแลใจ AI Smart Health Surveillance System • วพอ.พอ.</p>' +
+      '</div>' +
+      '</body>' +
+      '</html>';
+
+    return HtmlService.createHtmlOutput(html).setTitle("รายชื่อ นพอ. ที่ยังไม่ได้ทำแบบประเมิน | วพอ.พอ.");
+  }
+
   // 6.0 คำสั่งย้ายและซิงค์ข้อมูลทั้งหมด 262 รายการจากชีตเดิมเข้าสู่ชีตหลักนี้
   if (action === "migrateData" || action === "syncAllData") {
     const srcSs = SpreadsheetApp.openById("1iVop4KAdgMFxcoGe3qbjI5-zDPo1jPllTeDx_7Xdjh4");
@@ -641,6 +832,17 @@ function doGet(e) {
     for (let sa = 1; sa < srcAlerts.length; sa++) {
       const alId = String(srcAlerts[sa][1]).trim();
       if (!exAlIds[alId]) dstAlerts.appendRow(srcAlerts[sa]);
+    }
+
+    // ซิงค์ Bindings
+    const srcBindings = srcSs.getSheetByName("Bindings").getDataRange().getValues();
+    const dstBindings = dstSs.getSheetByName("Bindings");
+    const existingB = dstBindings.getDataRange().getValues();
+    const exBMap = {};
+    for (let b = 1; b < existingB.length; b++) exBMap[String(existingB[b][0]).trim()] = true;
+    for (let sb = 1; sb < srcBindings.length; sb++) {
+      const bId = String(srcBindings[sb][0]).trim();
+      if (bId && !exBMap[bId]) dstBindings.appendRow(srcBindings[sb]);
     }
     
     // สร้างแท็บรายงานใหม่ทั้งหมด
