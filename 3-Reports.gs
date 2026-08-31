@@ -303,13 +303,43 @@ function buildRiskReport() {
   return rows.length;
 }
 
+/* ---------- รายงาน 4: รายชื่อ นพอ. ที่ยังไม่ได้ทำแบบประเมิน ---------- */
+function buildMissingReport() {
+  const missingData = checkMissingStudents();
+  const rows = [];
+
+  missingData.missingList.forEach(function(s, idx) {
+    rows.push([
+      idx + 1,
+      s.year,
+      '="' + s.id + '"',
+      s.name,
+      "ยังไม่ได้รับการประเมิน",
+      "https://liff.line.me/2010984231-Z7kbSIPp"
+    ]);
+  });
+
+  const sh = writeReportSheet(SHEETS.RPT_MISSING,
+    "บัญชีรายชื่อ นพอ. ที่ยังไม่ได้ทำแบบประเมินสุขภาพใจ — ระบบดูแลใจ วพอ.พอ.",
+    ["ลำดับ", "ชั้นปี/รุ่น", "รหัสประจำตัว", "ยศ-ชื่อ-สกุล", "สถานะ", "ลิงก์ทำแบบประเมิน"],
+    rows);
+
+  // ระบายสีแถวเตือนสีส้ม/แดงอ่อน
+  for (let i = 0; i < rows.length; i++) {
+    sh.getRange(i + 4, 1, 1, 6).setBackground("#FEF2F2");
+  }
+
+  return rows.length;
+}
+
 /* ---------- สร้างทุกรายงานในครั้งเดียว ---------- */
 function buildAllSheetReports() {
   const y = buildYearReport();
   const p = buildPersonReport();
   const r = buildRiskReport();
+  const m = buildMissingReport();
   const msg = "สร้างรายงานเรียบร้อย — ชั้นปี " + y + " กลุ่ม · รายบุคคล " + p +
-    " คน · กลุ่มเสี่ยง " + r + " รายการ";
+    " คน · กลุ่มเสี่ยง " + r + " รายการ · ยังไม่ทำ " + m + " คน";
   try {
     SpreadsheetApp.getActiveSpreadsheet().toast(msg, "ระบบดูแลใจ", 6);
   } catch (e) { Logger.log(msg); }

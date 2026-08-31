@@ -1,0 +1,175 @@
+{
+  "ok": true,
+  "totalAssessments": 325,
+  "totalCompletedUnique": 559,
+  "byYear": {
+    "ชั้นปีที่ ๑ (รุ่น ๖๙)": {
+      "totalRoster": 64,
+      "completedCount": 60,
+      "missingCount": 4,
+      "completionRate": "93.8%",
+      "missingStudents": [
+        {
+          "studentId": "6903959",
+          "name": "นพอ. จิตรวรรณ ดิษฐพิสิษฐ์",
+          "gender": "-",
+          "section": "ปี 1"
+        },
+        {
+          "studentId": "6903968",
+          "name": "นพอ. ฐิตาภรณ์ ชูรัตน์",
+          "gender": "-",
+          "section": "ปี 1"
+        },
+        {
+          "studentId": "6903969",
+          "name": "นพอ.(ช) ณภัทร เพ็งปรีชา",
+          "gender": "-",
+          "section": "ปี 1"
+        },
+        {
+          "studentId": "6903977",
+          "name": "นพอ. ธัญวรัตน์ วิไล",
+          "gender": "-",
+          "section": "ปี 1"
+        }
+      ]
+    },
+    "ชั้นปีที่ ๒ (รุ่น ๖๘)": {
+      "totalRoster": 64,
+      "completedCount": 59,
+      "missingCount": 5,
+      "completionRate": "92.2%",
+      "missingStudents": [
+        {
+          "studentId": "6803883",
+          "name": "นพอ. กรชนก หน่อทิม",
+          "gender": "-",
+          "section": "ปี 2"
+        },
+        {
+          "studentId": "6803892",
+          "name": "นพอ. ชนัญธิดา สินปรุ",
+          "gender": "-",
+          "section": "ปี 2"
+        },
+        {
+          "studentId": "6803905",
+          "name": "นพอ.(ช) ธนพล เสือน้อย",
+          "gender": "-",
+          "section": "ปี 2"
+        },
+        {
+          "studentId": "6803939",
+          "name": "นพอ. สุภาวดี สุวรรณโกศัย",
+          "gender": "-",
+          "section": "ปี 2"
+        },
+        {
+          "studentId": "6803940",
+          "name": "นพอ. หฤทชนัน อุทกัง",
+          "gender": "-",
+          "section": "ปี 2"
+        }
+      ]
+    },
+    "ชั้นปีที่ ๓ (รุ่น ๖๗)": {
+      "totalRoster": 61,
+      "completedCount": 57,
+      "missingCount": 4,
+      "completionRate": "93.4%",
+      "missingStudents": [
+        {
+          "studentId": "6703845",
+          "name": "นพอ.(ช) นภันต์กร อินทรแก้ว",
+          "gender": "-",
+          "section": "ปี 3"
+        },
+        {
+          "studentId": "6703865",
+          "name": "นพอ.(ช) โรจน์ศักดิ์ ทินนา",
+          "gender": "-",
+          "section": "ปี 3"
+        },
+        {
+          "studentId": "6703873",
+          "name": "นพอ. ศุภางค์พักตร์ อักษรนิติ",
+          "gender": "-",
+          "section": "ปี 3"
+        },
+        {
+          "studentId": "6703879",
+          "name": "นพอ. สุรภา ธีสุระ",
+          "gender": "-",
+          "section": "ปี 3"
+        }
+      ]
+    },
+    "ชั้นปีที่ ๔ (รุ่น ๖๖)": {
+      "totalRoster": 63,
+      "completedCount": 54,
+      "missingCount": 9,
+      "completionRate": "85.7%",
+      "missingStudents": [
+        {
+          "studentId": "6603757",
+          "name": "นพอ. กัลยาณี นารีพล",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603762",
+          "name": "นพอ. ชฎาภา บุตรวงษ์",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603765",
+          "name": "นพอ.(ช) ชายชาญ ไทยรินทร์",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603767",
+          "name": "นพอ. ณัฐนรินทร์ เต่าไธสง",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603773",
+          "name": "นพอ. ธัญชนก ไชยปรุง",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603776",
+          "name": "นพอ. นภชนก อัครวุฒิญาณ",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603802",
+          "name": "นพอ. ศตพร คงศักดิ์",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603807",
+          "name": "นพอ. สถิตย์ภรณ์ นวลขวัญ",
+          "gender": "-",
+          "section": "ปี 4"
+        },
+        {
+          "studentId": "6603816",
+          "name": "นพอ.(ช) อมฤทธิ์ สุทธิวิลัย",
+          "gender": "-",
+          "section": "ปี 4"
+        }
+      ]
+    }
+  },
+  "grandTotalRoster": 252,
+  "grandTotalMissing": 22,
+  "grandTotalCompleted": 230,
+  "overallCompletionRate": "91.3%"
+}
