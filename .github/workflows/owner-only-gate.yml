@@ -1,0 +1,45 @@
+name: Owner Only Gate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  owner-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-owner actor
+        shell: bash
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: anuchit1tube168-cmd
+        run: |
+          if [ "$ACTOR" != "$OWNER" ]; then
+            echo "::error::Unauthorized actor. Only repository owner may change this repository."
+            exit 1
+          fi
+      - name: Checkout repository read-only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+      - name: Block write-capable or exfiltration workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            [ "$f" = ".github/workflows/owner-only-gate.yml" ] && continue
+            if grep -nEi '(contents|actions|packages|deployments|pull-requests|issues|id-token):[[:space:]]*write' "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::Workflow requests write permission"
+              fail=1
+            fi
+            if grep -nEi '(^|[[:space:]])(curl|wget|nc|scp|rsync|ssh)([[:space:]]|$)|Invoke-WebRequest|upload-artifact|repository_dispatch' "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::Possible outbound data transfer or artifact collection"
+              fail=1
+            fi
+          done < <(git ls-files '.github/workflows/*.yml' '.github/workflows/*.yaml')
+          [ "$fail" -eq 0 ]
