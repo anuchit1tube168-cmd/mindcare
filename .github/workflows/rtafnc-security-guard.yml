@@ -1,0 +1,31 @@
+name: RTAFNC Security Guard
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  security-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - name: Block secrets and sensitive datasets
+        shell: bash
+        run: |
+          set -uo pipefail
+          fail=0
+          while IFS= read -r f; do lower="$(printf '%s' "$f" | tr '[:upper:]' '[:lower:]')"; case "$lower" in .env|*/.env|*.pem|*.key|*.p12|*.pfx|id_rsa*|*/id_rsa*|*credentials*.json|*service-account*.json|*service_account*.json|*/students.json|*/students_data.js|*/students_photos.js|*/teachers_data.js|*/deeds.json|*/deeds_data.js|*/all_assessments.json|*/missing_students.json|*/line_mappings.json|*/medical_records.json|*/patients.json|*/private/*|*/secrets/*|*/backups/*|*/exports/*) echo "::error file=$f::Sensitive file must not be tracked in Git"; fail=1;; esac; done < <(git ls-files)
+          pattern='-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{20,}|[0-9]{8,12}:[A-Za-z0-9_-]{30,}|DEFAULT_LINE_CHANNEL_ACCESS_TOKEN[[:space:]]*='
+          hits="$(git grep -IlE "$pattern" -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.py' '*.gs' '*.json' '*.yml' '*.yaml' '*.toml' '*.ini' '*.conf' '*.sh' '*.html' 2>/dev/null || true)"
+          if [ -n "$hits" ]; then while IFS= read -r f; do [ -z "$f" ] && continue; echo "::error file=$f::Possible hard-coded credential detected; value intentionally hidden"; done <<< "$hits"; fail=1; fi
+          [ "$fail" -eq 0 ] || exit 1
+          echo 'Security Guard passed.'
