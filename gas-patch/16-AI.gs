@@ -1,4 +1,3 @@
-
 /* ==========================================================
  * 16-AI — Gemini ช่วยงาน ผปค. (ไม่คุยกับนักเรียนโดยตรง ไม่ใช้ตัดสินระดับความเสี่ยง)
  *
@@ -16,7 +15,12 @@
  * ติดตั้ง: รัน installAiTriggers() หนึ่งครั้ง
  * ========================================================== */
 
-const AI_MODELS_FALLBACK = ["gemini-3.6-flash", "gemini-2.5-flash"];
+// รุ่นราคาถูก (Flash-Lite) ก่อน — งานนี้ไม่ต้องใช้รุ่นใหญ่
+const AI_MODELS_FALLBACK = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"];
+// เพดานต่อเดือน (ห้ามเกิน): ถึงเพดานแล้วหยุดเรียก AI จนถึงเดือนถัดไป — งานหลักยังทำงานปกติ
+// 150,000 token ≈ ไม่เกินราว 1 ดอลลาร์ แม้คิดราคารุ่นที่แพงที่สุดในรายการ (ปรับได้ที่ AI_MONTHLY_TOKEN_LIMIT)
+const AI_DEFAULT_MONTHLY_TOKENS = 150000;
+const AI_DEFAULT_MONTHLY_CALLS = 400;
 const AI_QUEUE_SHEET = "AiQueue";
 
 // ถ้อยคำเสี่ยง (ด่านแรก ทำงานแม้ AI ล่ม) — ตรวจแบบตัดช่องว่างแล้ว
@@ -55,6 +59,7 @@ function geminiGenerate_(prompt, opts) {
   const props = PropertiesService.getScriptProperties();
   const key = props.getProperty("GEMINI_API_KEY");
   if (!key) return null;
+  if (!aiBudgetAllows_()) return null;
   const models = [props.getProperty("GEMINI_MODEL")].concat(AI_MODELS_FALLBACK).filter(Boolean);
   const body = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -81,6 +86,7 @@ function geminiGenerate_(prompt, opts) {
         return null;
       }
       const j = JSON.parse(res.getContentText());
+      aiBudgetRecord_(j.usageMetadata && j.usageMetadata.totalTokenCount);
       const parts = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts;
       const text = parts ? parts.map(function (p) { return p.text || ""; }).join("").trim() : "";
       return text || null;
@@ -97,6 +103,47 @@ const AI_SYSTEM_STAFF =
   "คุณเป็นผู้ช่วยของหน่วยปกครอง (ผปค.) วิทยาลัยพยาบาลทหารอากาศ ที่ดูแลสุขภาพใจของนักเรียนพยาบาล " +
   "ตอบเป็นภาษาไทย สุภาพ กระชับ ห้ามวินิจฉัยโรค ห้ามแต่งตัวเลขหรือข้อเท็จจริงที่ไม่มีในข้อมูล " +
   "ถ้าข้อมูลไม่พอให้บอกตรงๆ ช่องทางฉุกเฉินคือสายด่วนสุขภาพจิต 1323 และ 1669";
+
+/* ---------------- เพดานค่าใช้จ่ายรายเดือน ---------------- */
+
+function aiMonthKey_() { return "AI_USAGE_" + Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyyMM"); }
+
+function aiUsage_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(aiMonthKey_()) || "{}"); }
+  catch (e) { return {}; }
+}
+
+function aiBudgetAllows_() {
+  const p = PropertiesService.getScriptProperties();
+  const tokLimit = Number(p.getProperty("AI_MONTHLY_TOKEN_LIMIT")) || AI_DEFAULT_MONTHLY_TOKENS;
+  const callLimit = Number(p.getProperty("AI_MONTHLY_CALL_LIMIT")) || AI_DEFAULT_MONTHLY_CALLS;
+  const u = aiUsage_();
+  const ok = (u.tokens || 0) < tokLimit && (u.calls || 0) < callLimit;
+  if (!ok && !u.notified) {
+    u.notified = true;
+    p.setProperty(aiMonthKey_(), JSON.stringify(u));
+    try {
+      pushTelegramMessage("⚠️ AI ของระบบดูแลใจใช้ครบเพดานเดือนนี้แล้ว (" + (u.tokens || 0) + " token / " + (u.calls || 0) +
+        " ครั้ง) — หยุดใช้ AI อัตโนมัติจนถึงต้นเดือนหน้า\nงานหลักยังทำงานปกติ: แจ้งเตือน, ขอคุย, ตรวจถ้อยคำเสี่ยง");
+    } catch (e) {}
+  }
+  return ok;
+}
+
+function aiBudgetRecord_(tokens) {
+  const lock = LockService.getScriptLock();
+  const got = lock.tryLock(3000);
+  try {
+    const p = PropertiesService.getScriptProperties();
+    const u = aiUsage_();
+    u.calls = (u.calls || 0) + 1;
+    u.tokens = (u.tokens || 0) + (Number(tokens) || 1500); // ไม่รู้จำนวนจริง → คิดเผื่อไว้ก่อน
+    p.setProperty(aiMonthKey_(), JSON.stringify(u));
+  } finally { if (got) lock.releaseLock(); }
+}
+
+/** ดูยอดใช้ AI เดือนนี้ (รันใน editor) */
+function showAiUsage() { Logger.log(aiMonthKey_() + " " + JSON.stringify(aiUsage_())); }
 
 /* ---------------- 1) สรุปรายสัปดาห์ ---------------- */
 
