@@ -2374,7 +2374,8 @@ async function sendTalk() {
     action: "requestTalk",
     clientRef: talk.ref,
     studentId: activeStudentId(),
-    lineUserId: liffState.userId,
+    lineUserId: liffState.userId,   // backend เก็บไว้คอลัมน์ M ของ Alerts ให้ ผปค. ตอบกลับได้
+    lineName: liffState.displayName || "",
     displayName: identity.name || liffState.displayName || "",
     urgency: chipValue("urgency") || "urgent",
     contact: contact || "line",
