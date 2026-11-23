@@ -401,6 +401,63 @@
     opacity: 0; pointer-events: none; transition: opacity .3s; max-width: 90%;
   }
   .toast.show { opacity: 1; }
+
+  /* ---------- สถานะการบันทึกผล ---------- */
+  .save-status {
+    display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px;
+    border-radius: 14px; font-size: 14px; line-height: 1.5;
+    background: var(--glass-bg); border: 1px solid var(--glass-border);
+  }
+  .save-status .ss-icon { font-size: 18px; flex: none; }
+  .save-status .ss-text { flex: 1; }
+  .save-status .ss-ref { display: block; font-size: 12.5px; color: var(--cream-dim); letter-spacing: .3px; }
+  .save-status.ok { border-color: rgba(95,183,126,0.55); background: rgba(95,183,126,0.12); }
+  .save-status.warn { border-color: rgba(229,182,90,0.6); background: rgba(229,182,90,0.12); }
+  .save-status button {
+    flex: none; font: inherit; font-size: 13px; font-weight: 700; padding: 7px 12px; border-radius: 10px;
+    border: 1px solid var(--gold); background: transparent; color: var(--gold-soft); cursor: pointer;
+  }
+
+  /* ---------- แผ่นล่าง (bottom sheet) ใช้กับรายงาน / ขอคุย ---------- */
+  .sheet-backdrop {
+    position: fixed; inset: 0; z-index: 120; background: rgba(2,14,9,0.72);
+    display: none; align-items: flex-end; justify-content: center;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  .sheet-backdrop.open { display: flex; }
+  .sheet {
+    width: 100%; max-width: 520px; max-height: 92dvh; overflow-y: auto;
+    background: linear-gradient(180deg, #123B29, #0A2A1C); border: 1px solid var(--glass-border);
+    border-bottom: none; border-radius: 22px 22px 0 0; padding: 18px 18px calc(22px + env(safe-area-inset-bottom));
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
+  }
+  .sheet-grip { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.25); margin: 0 auto 14px; }
+  .sheet h2 { font-size: 19px; color: var(--gold-soft); margin-bottom: 4px; }
+  .sheet .sheet-sub { font-size: 13.5px; color: var(--cream-dim); line-height: 1.6; margin-bottom: 14px; }
+  .sheet .btn { width: 100%; }
+  .sheet .field-label { font-size: 14px; font-weight: 700; margin: 14px 0 8px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip-opt {
+    font: inherit; font-size: 14px; padding: 9px 14px; border-radius: 999px; cursor: pointer;
+    background: var(--glass-bg); color: var(--cream); border: 1px solid var(--glass-border);
+  }
+  .chip-opt[aria-pressed="true"] { background: rgba(229,182,90,0.2); border-color: var(--gold); color: var(--gold-soft); font-weight: 700; }
+  .sheet input[type="tel"], .sheet textarea {
+    width: 100%; font: inherit; font-size: 15px; color: var(--cream); padding: 11px 12px; border-radius: 12px;
+    background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); margin-top: 8px;
+  }
+  .sheet textarea { min-height: 76px; resize: vertical; }
+  .sheet .hint { font-size: 12.5px; color: var(--cream-dim); margin-top: 6px; line-height: 1.55; }
+  .report-img { width: 100%; border-radius: 12px; display: block; background: #fff; }
+  .hotline-row { display: flex; gap: 8px; margin-top: 12px; }
+  .hotline-row a {
+    flex: 1; text-align: center; text-decoration: none; font-size: 14px; font-weight: 700; padding: 11px 8px;
+    border-radius: 12px; color: var(--cream); background: var(--glass-bg); border: 1px solid var(--glass-border);
+  }
+  .talk-done { text-align: center; padding: 6px 0 2px; }
+  .talk-done .big { font-size: 44px; }
+  .talk-done .ticket { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 10px;
+    background: rgba(0,0,0,0.25); font-size: 13px; letter-spacing: .4px; color: var(--gold-soft); }
 </style>
 </head>
 <body>
@@ -529,9 +586,14 @@
 
   <div style="display:flex; flex-direction:column; gap:10px; margin-top:16px;">
     <button class="btn btn-gold" id="btn-download-my-report" style="display:flex; align-items:center; justify-content:center; gap:8px;">
-      📥 ดาวน์โหลดรายงานผลของฉัน (CSV/Excel)
+      📄 ดาวน์โหลดรายงานผลของฉัน
     </button>
-    <button class="btn btn-brick" id="btn-help">อยากคุยกับใครสักคน</button>
+    <button class="btn btn-brick" id="btn-help">💬 อยากคุยกับ ผปค. — ส่งเรื่องทันที</button>
+  </div>
+  <div class="save-status" id="save-status" role="status" aria-live="polite" style="display:none">
+    <span class="ss-icon" id="ss-icon">⏳</span>
+    <span class="ss-text" id="ss-text">กำลังบันทึกผลเข้าระบบ…</span>
+    <button type="button" id="ss-retry" style="display:none">ลองอีกครั้ง</button>
   </div>
 
   <details class="debug" id="debug-panel">
@@ -555,7 +617,7 @@
   <p>สิ่งที่คุณกำลังแบกอยู่ตอนนี้หนักมาก และมันไม่ใช่ความผิดของคุณเลย
      คุณไม่ต้องผ่านช่วงเวลานี้เพียงลำพัง — ตอนนี้มีคนพร้อมอยู่ข้างคุณจริงๆ</p>
   <a class="btn btn-brick" href="tel:1323" style="max-width:360px; margin:24px auto 0; text-decoration:none; text-align:center;">โทรสายด่วนสุขภาพจิต 1323 (ฟรี ตลอด 24 ชม.)</a>
-  <button class="btn btn-gold" id="btn-care-teacher" style="max-width:360px; margin:12px auto 0;">ให้อาจารย์ผู้ดูแลติดต่อฉันตอนนี้</button>
+  <button class="btn btn-gold" id="btn-care-teacher" style="max-width:360px; margin:12px auto 0;">ให้ ผปค. / อาจารย์ผู้ดูแลติดต่อฉันตอนนี้</button>
   <p class="care-honest">เราขอบอกตรงๆ ว่า ผลการประเมินระดับนี้ ระบบจะแจ้งอาจารย์ผู้ดูแลของคุณทันที
      เพื่อให้มีคนติดต่อดูแลคุณโดยเร็วที่สุด — ไม่มีการทำอะไรลับหลังคุณ</p>
   <button class="btn btn-ghost" id="btn-care-result" style="max-width:360px; margin:18px auto 0;">ดูผลการประเมินทั้งหมด</button>
@@ -592,6 +654,58 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- แผ่นรายงานผลรายบุคคล — สร้างบนเครื่องผู้ใช้ ไม่มีการดึงข้อมูลใครจากเซิร์ฟเวอร์ -->
+<div class="sheet-backdrop" id="report-sheet" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="report-title">
+    <div class="sheet-grip"></div>
+    <h2 id="report-title">รายงานผลการประเมินของฉัน</h2>
+    <p class="sheet-sub" id="report-hint">กำลังจัดทำรายงาน…</p>
+    <img class="report-img" id="report-img" alt="ใบสรุปผลการประเมินสุขภาพใจ">
+    <a class="btn btn-gold" id="report-save" download style="display:block; text-align:center; text-decoration:none;">💾 บันทึกรูปลงเครื่อง</a>
+    <button class="btn btn-ghost" id="report-close" type="button">ปิด</button>
+  </div>
+</div>
+
+<!-- แผ่นขอคุยกับ ผปค. -->
+<div class="sheet-backdrop" id="talk-sheet" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="talk-title">
+    <div class="sheet-grip"></div>
+    <div id="talk-form">
+      <h2 id="talk-title">ส่งเรื่องถึง ผปค. (หน่วยปกครอง)</h2>
+      <p class="sheet-sub">กดปุ่มด้านล่างได้เลย เรื่องจะเข้าระบบและแจ้ง ผปค. ทันที ไม่ต้องเล่ารายละเอียดก็ได้
+        — ข้อมูลนี้เห็นเฉพาะผู้ดูแลที่ได้รับมอบหมายเท่านั้น</p>
+      <div class="field-label">อยากให้ติดต่อเมื่อไหร่</div>
+      <div class="chip-row" data-group="urgency">
+        <button type="button" class="chip-opt" data-val="urgent" aria-pressed="true">ด่วน · วันนี้</button>
+        <button type="button" class="chip-opt" data-val="normal" aria-pressed="false">ไม่ด่วน · ภายใน 24 ชม.</button>
+      </div>
+      <div class="field-label">สะดวกให้ติดต่อทางไหน</div>
+      <div class="chip-row" data-group="contact">
+        <button type="button" class="chip-opt" data-val="line" aria-pressed="true">ทัก LINE กลับ</button>
+        <button type="button" class="chip-opt" data-val="phone" aria-pressed="false">โทรหาฉัน</button>
+        <button type="button" class="chip-opt" data-val="visit" aria-pressed="false">ฉันจะไปที่ห้อง ผปค.</button>
+      </div>
+      <input type="tel" id="talk-phone" inputmode="tel" maxlength="15" placeholder="เบอร์โทรของคุณ (เช่น 08x-xxx-xxxx)" style="display:none" autocomplete="tel">
+      <div class="field-label">อยากบอกอะไรเพิ่มไหม (ไม่บังคับ)</div>
+      <textarea id="talk-msg" maxlength="300" placeholder="พิมพ์สั้นๆ ได้ หรือเว้นว่างไว้ก็ได้"></textarea>
+      <button class="btn btn-brick" id="talk-send" type="button">ส่งถึง ผปค. ทันที</button>
+      <p class="hint" id="talk-err" style="color:var(--gold-soft)"></p>
+    </div>
+    <div id="talk-done" class="talk-done" style="display:none">
+      <div class="big">🤝</div>
+      <h2 id="talk-done-title">รับเรื่องแล้ว</h2>
+      <p class="sheet-sub" id="talk-done-text"></p>
+      <span class="ticket" id="talk-ticket"></span>
+    </div>
+    <div class="hotline-row">
+      <a href="tel:1323">📞 สายด่วนสุขภาพจิต 1323</a>
+      <a href="tel:1669">🚑 ฉุกเฉิน 1669</a>
+    </div>
+    <p class="hint">ถ้ารู้สึกไม่ปลอดภัยตอนนี้ โทร 1323 (ฟรี 24 ชม.) หรือ 1669 ได้ทันที ไม่ต้องรอ</p>
+    <button class="btn btn-ghost" id="talk-close" type="button">ปิด</button>
+  </div>
+</div>
 
 <script type="module">
 /* =========================================================
@@ -1436,10 +1550,108 @@ function captureCamSnapshot() {
   }
 }
 
+/* =========================================================
+   ส่วนที่ 3.6: บันทึกผลเข้าระบบ (ทนเน็ตหลุด + ไม่บันทึกซ้ำ)
+   - ทุกผลประเมินมี clientRef ของตัวเอง → backend เห็นเลขเดิมจะไม่สร้างแถวซ้ำ
+   - เก็บสำเนารอส่ง (outbox) ในเครื่องก่อนส่ง: ปิดแอประหว่างส่งก็ไม่หาย
+     เปิดแอปครั้งหน้า / สัญญาณกลับมา ระบบส่งให้เอง
+   - outbox ไม่เก็บภาพใบหน้า และทิ้งรายการที่ค้างเกิน 7 วัน (ลดข้อมูลค้างบนเครื่องที่อาจใช้ร่วมกัน)
+   ========================================================= */
+const OUTBOX_KEY = "mindcare_outbox_v1";
+const OUTBOX_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const saveState = { status: "idle", clientRef: null, assessmentId: null, savedAt: null, payload: null };
+
+function newRef(prefix) {
+  const raw = (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID().replace(/-/g, "")
+    : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  return prefix + "-" + raw.slice(0, 24);
+}
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function readOutbox() {
+  try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]") || []; } catch (e) { return []; }
+}
+function writeOutbox(list) {
+  try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(list.slice(-10))); } catch (e) {}
+}
+function outboxAdd(payload) {
+  const { faceSnapshot, ...safe } = payload; // ไม่เก็บภาพใบหน้าลงเครื่อง
+  const list = readOutbox().filter(x => x.payload && x.payload.clientRef !== payload.clientRef);
+  list.push({ payload: safe, at: Date.now() });
+  writeOutbox(list);
+}
+function outboxRemove(ref) {
+  writeOutbox(readOutbox().filter(x => x.payload && x.payload.clientRef !== ref));
+}
+
+/** POST ไป GAS พร้อม timeout — server ตอบ ok:false ถือเป็น error ที่ "ไม่ควรส่งซ้ำ" */
+async function postToGas(payload, timeoutMs = 45000) {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(CONFIG.GAS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const json = await res.json();
+    if (!json || json.ok !== true) {
+      const e = new Error((json && json.error) || "server rejected");
+      e.server = true;
+      throw e;
+    }
+    return json;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function fmtThaiDateTime(d) {
+  try {
+    return new Date(d).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" });
+  } catch (e) { return new Date(d).toLocaleString(); }
+}
+
+function setSaveStatus(kind, attempt) {
+  saveState.status = kind;
+  const box = document.getElementById("save-status");
+  if (!box) return;
+  const icon = document.getElementById("ss-icon");
+  const text = document.getElementById("ss-text");
+  const retry = document.getElementById("ss-retry");
+  box.style.display = "flex";
+  box.classList.remove("ok", "warn");
+  retry.style.display = "none";
+  if (kind === "saving") {
+    icon.textContent = "⏳";
+    text.textContent = attempt ? `สัญญาณไม่ค่อยดี กำลังลองส่งใหม่ (ครั้งที่ ${attempt + 1})…` : "กำลังบันทึกผลเข้าระบบ…";
+  } else if (kind === "saved") {
+    box.classList.add("ok");
+    icon.textContent = "✅";
+    text.innerHTML = `บันทึกผลเข้าระบบเรียบร้อย<span class="ss-ref">เลขอ้างอิง ${esc(saveState.assessmentId || "-")} · ${esc(fmtThaiDateTime(saveState.savedAt))}</span>`;
+  } else if (kind === "failed") {
+    box.classList.add("warn");
+    icon.textContent = "⚠️";
+    text.textContent = "ยังบันทึกไม่สำเร็จ ผลเก็บไว้ในเครื่องแล้ว ระบบจะส่งให้เองเมื่อสัญญาณกลับมา";
+    retry.style.display = "inline-block";
+  } else if (kind === "rejected") {
+    box.classList.add("warn");
+    icon.textContent = "⚠️";
+    text.textContent = "ระบบยังรับผลไม่ได้ กรุณาแจ้ง ผปค. หรือกด 'ลองอีกครั้ง'";
+    retry.style.display = "inline-block";
+  } else if (kind === "local") {
+    icon.textContent = "ℹ️";
+    text.textContent = "โหมดทดสอบ: หน้านี้ยังไม่ได้เชื่อมต่อระบบบันทึกผล";
+  }
+}
+
 async function submitResultOnce() {
   if (_submitted) return;
   _submitted = true;
-  if (!CONFIG.GAS_ENDPOINT) return; // โหมดทดสอบหน้าเว็บอย่างเดียว
+  if (!CONFIG.GAS_ENDPOINT) { setSaveStatus("local"); return; } // โหมดทดสอบหน้าเว็บอย่างเดียว
 
   const idx = getBehaviorIndex();
   const conflict = isConflict(idx);
@@ -1451,8 +1663,11 @@ async function submitResultOnce() {
     snapshot = captureCamSnapshot();
   }
 
+  saveState.clientRef = saveState.clientRef || newRef("S");
   const payload = {
     action: "submitAssessment",
+    clientRef: saveState.clientRef, // backend ใช้กันบันทึกซ้ำเมื่อส่งซ้ำ
+    clientTime: new Date().toISOString(),
     studentId: activeStudentId(),
     lineUserId: liffState.userId,   // ผูกผลกับ LINE userId ด้วย (ถ้ามี)
     st5Score: state.results.st5?.score ?? null,
@@ -1470,23 +1685,63 @@ async function submitResultOnce() {
     userType: identity.userType || queryParam("ut") || "student",
     faceSnapshot: snapshot, // ส่งภาพถ่ายใบหน้ากรณีเฝ้าระวัง
   };
+  saveState.payload = payload;
+  outboxAdd(payload); // เก็บสำเนาก่อนส่ง — ถ้าแอปถูกปิดกลางทาง ยังส่งต่อได้ภายหลัง
+  await sendAssessmentWithRetry(payload);
+}
 
+async function sendAssessmentWithRetry(payload) {
+  const waits = [0, 2000, 5000, 10000];
+  for (let i = 0; i < waits.length; i++) {
+    setSaveStatus("saving", i);
+    if (waits[i]) await sleep(waits[i]);
+    try {
+      const json = await postToGas(payload);
+      saveState.assessmentId = json.assessmentId || null;
+      saveState.savedAt = new Date();
+      outboxRemove(payload.clientRef);
+      setSaveStatus("saved");
+      refreshReportIfOpen();
+      return true;
+    } catch (err) {
+      console.warn("submit attempt " + (i + 1) + " failed:", err);
+      if (err.server) { setSaveStatus("rejected"); return false; } // server ปฏิเสธ — ส่งซ้ำก็ไม่ช่วย
+    }
+  }
+  setSaveStatus("failed");
+  return false;
+}
+
+/** ส่งรายการที่ค้างในเครื่อง (เปิดแอปครั้งถัดไป / สัญญาณกลับมา) */
+let _flushing = false;
+async function flushOutbox() {
+  if (_flushing || !CONFIG.GAS_ENDPOINT || !navigator.onLine) return;
+  _flushing = true;
   try {
-    const res = await fetch(CONFIG.GAS_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const json = await res.json();
-    console.log("Submit success:", json);
-    showToast("บันทึกผลเรียบร้อยแล้ว มีคนดูแลข้อมูลของคุณอยู่นะ");
-  } catch (err) {
-    console.warn("submit failed:", err);
-    showToast("ยังส่งข้อมูลไม่สำเร็จ ผลของคุณแสดงบนหน้าจอตามปกติ ลองใหม่เมื่อมีสัญญาณอินเทอร์เน็ตนะ");
-    _submitted = false; // เปิดโอกาสส่งซ้ำถ้าผู้ใช้กลับมาหน้าผลอีกครั้ง
+    const now = Date.now();
+    const list = readOutbox().filter(x => x.payload && now - (x.at || 0) < OUTBOX_MAX_AGE_MS);
+    writeOutbox(list);
+    for (const item of list) {
+      const p = item.payload;
+      if (p.clientRef === saveState.clientRef && saveState.status === "saving") continue; // กำลังส่งอยู่แล้ว
+      try {
+        const json = await postToGas(p);
+        outboxRemove(p.clientRef);
+        if (p.clientRef === saveState.clientRef && p.action === "submitAssessment") {
+          saveState.assessmentId = json.assessmentId || null;
+          saveState.savedAt = new Date();
+          setSaveStatus("saved");
+          refreshReportIfOpen();
+        }
+      } catch (err) {
+        if (err.server) outboxRemove(p.clientRef); // ข้อมูลเสีย/ถูกปฏิเสธ ไม่ต้องค้างไว้
+      }
+    }
+  } finally {
+    _flushing = false;
   }
 }
+window.addEventListener("online", flushOutbox);
 
 /* =========================================================
    ส่วนที่ 3.7: สัญญาณรายช่วง + พักหายใจระหว่างชุด
@@ -1889,23 +2144,295 @@ document.getElementById("btn-next").addEventListener("click", nextQuestion);
 document.getElementById("btn-back").addEventListener("click", () => {
   if (state.qIdx > 0) { state.qIdx--; slideToQuestion("right"); }
 });
-document.getElementById("btn-download-my-report").addEventListener("click", () => {
-  const sId = identity.id || CONFIG.STUDENT_ID || "";
-  if (!CONFIG.GAS_ENDPOINT) {
-    showToast("ยังไม่ได้เชื่อมต่อระบบคลาวด์");
-    return;
+/* =========================================================
+   รายงานผลรายบุคคล — วาดบนเครื่องผู้ใช้เป็นรูป PNG
+   เหตุผล: ลิงก์ดาวน์โหลดเดิมเรียก ?report=student&id=… ซึ่ง (1) เปิดไม่ได้ในเบราว์เซอร์ของ LINE
+   และ (2) ใครรู้รหัสก็ดึงผลคนอื่นได้ — สร้างจากผลที่อยู่บนเครื่องจึงทั้งใช้ได้จริงและไม่รั่ว
+   ========================================================= */
+const REPORT_W = 1080;
+const RPT = { forest: "#0F3D2A", gold: "#C99A3B", ink: "#1E2A24", sub: "#5B6B62", line: "#E2E6E1", paper: "#FFFFFF" };
+const RPT_FONT = "'Noto Sans Thai','IBM Plex Sans Thai','Sukhumvit Set','Thonburi',Tahoma,sans-serif";
+
+function splitThai(text) {
+  try {
+    if (typeof Intl !== "undefined" && Intl.Segmenter) {
+      return Array.from(new Intl.Segmenter("th", { granularity: "word" }).segment(text), s => s.segment);
+    }
+  } catch (e) {}
+  return Array.from(text); // fallback: ตัดทีละตัวอักษร
+}
+function wrapLines(ctx, text, maxW) {
+  const lines = [];
+  let cur = "";
+  for (const seg of splitThai(String(text || ""))) {
+    if (ctx.measureText(cur + seg).width > maxW && cur) { lines.push(cur.trimEnd()); cur = seg.trimStart(); }
+    else cur += seg;
   }
-  showToast("กำลังดาวน์โหลดรายงานของคุณ...");
-  const downloadUrl = `${CONFIG.GAS_ENDPOINT}?report=student&id=${encodeURIComponent(sId)}`;
-  window.open(downloadUrl, "_blank");
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+function reportData() {
+  const sid = activeStudentId();
+  const rows = ["st5", "q2", "q9", "q8"].filter(k => state.results[k]).map(k => ({
+    name: INSTRUMENT_NAMES[k], score: state.results[k].score, max: INSTRUMENT_MAX[k],
+    level: state.results[k].level, color: state.results[k].color,
+  }));
+  const st5 = state.results.st5;
+  const notes = [];
+  if (state.results.q9 && state.results.q9.score >= 13) notes.push("ผล 9Q ระดับนี้ ควรได้พบบุคลากรทางการแพทย์ — ผปค./อาจารย์ผู้ดูแลจะช่วยประสาน");
+  if (state.results.q8 && state.results.q8.score >= 1) notes.push("ผู้ดูแลจะติดต่อคุณเพื่อชวนคุยและวางแผนดูแลร่วมกัน");
+  return {
+    name: identity.name || liffState.displayName || "-",
+    sid: /^\d{7}$/.test(sid) ? sid : "-",
+    when: fmtThaiDateTime(saveState.savedAt || new Date()),
+    ref: saveState.assessmentId || (saveState.status === "saved" ? "-" : "รอบันทึกเข้าระบบ"),
+    rows, notes,
+    tip: st5 ? (ST5_TIPS.find(t => st5.score <= t.max) || {}).tip || "" : "",
+  };
+}
+
+/** วาดรายงาน — dry=true ใช้วัดความสูงก่อน แล้วค่อยวาดจริง */
+function drawReport(ctx, data, dry) {
+  const P = 64, W = REPORT_W, inner = W - P * 2;
+  const font = (w, px) => `${w} ${px}px ${RPT_FONT}`;
+  const fill = (fn) => { if (!dry) fn(); };
+  let y = 0;
+
+  // แถบหัว
+  fill(() => { ctx.fillStyle = RPT.forest; ctx.fillRect(0, 0, W, 210); ctx.fillStyle = RPT.gold; ctx.fillRect(0, 210, W, 6); });
+  fill(() => {
+    ctx.fillStyle = RPT.gold; ctx.font = font(700, 26); ctx.fillText("วิทยาลัยพยาบาลทหารอากาศ · ระบบดูแลใจ", P, 72);
+    ctx.fillStyle = "#FFFFFF"; ctx.font = font(800, 46); ctx.fillText("ใบสรุปผลการประเมินสุขภาพใจ", P, 136);
+    ctx.fillStyle = "#CFE0D6"; ctx.font = font(500, 24); ctx.fillText("เฉพาะบุคคล · เป็นความลับ", P, 178);
+  });
+  y = 270;
+
+  // ข้อมูลผู้รับการประเมิน
+  const info = [["ชื่อ-สกุล", data.name], ["รหัสประจำตัว", data.sid], ["วันที่ประเมิน", data.when], ["เลขอ้างอิงในระบบ", data.ref]];
+  ctx.font = font(500, 28);
+  info.forEach(([k, v]) => {
+    fill(() => { ctx.fillStyle = RPT.sub; ctx.font = font(500, 26); ctx.fillText(k, P, y); });
+    fill(() => { ctx.fillStyle = RPT.ink; ctx.font = font(700, 28); ctx.fillText(String(v), P + 300, y); });
+    y += 50;
+  });
+  y += 10;
+  fill(() => { ctx.fillStyle = RPT.line; ctx.fillRect(P, y, inner, 2); });
+  y += 56;
+
+  // ผลรายแบบประเมิน
+  fill(() => { ctx.fillStyle = RPT.forest; ctx.font = font(800, 32); ctx.fillText("ผลการประเมิน", P, y); });
+  y += 30;
+  data.rows.forEach(r => {
+    ctx.font = font(600, 26);
+    const levelLines = wrapLines(ctx, r.level, inner - 70);
+    const h = 92 + levelLines.length * 38;
+    const top = y;
+    fill(() => {
+      ctx.fillStyle = "#F6F8F6"; ctx.fillRect(P, top, inner, h);
+      ctx.fillStyle = r.color || RPT.gold; ctx.fillRect(P, top, 10, h);
+      ctx.fillStyle = RPT.ink; ctx.font = font(700, 27); ctx.fillText(r.name, P + 34, top + 46);
+      ctx.font = font(800, 30); ctx.textAlign = "right";
+      ctx.fillText(`${r.score} / ${r.max}`, P + inner - 28, top + 46); ctx.textAlign = "left";
+      // สีระดับบนกระดาษขาว: เข้มขึ้นให้อ่านง่ายเมื่อพิมพ์/ดูกลางแดด
+      ctx.fillStyle = ({ "#D9A441": "#9A6A12", "#4C9A6A": "#2C7148" })[r.color] || r.color || RPT.ink;
+      ctx.font = font(600, 26);
+      levelLines.forEach((ln, i) => ctx.fillText(ln, P + 34, top + 90 + i * 38));
+    });
+    y += h + 16;
+  });
+
+  // คำแนะนำ
+  const paras = [data.tip, ...data.notes].filter(Boolean);
+  if (paras.length) {
+    y += 34;
+    fill(() => { ctx.fillStyle = RPT.forest; ctx.font = font(800, 32); ctx.fillText("คำแนะนำ", P, y); });
+    y += 48;
+    ctx.font = font(500, 26);
+    paras.forEach(t => {
+      wrapLines(ctx, t, inner).forEach(ln => { fill(() => { ctx.fillStyle = RPT.ink; ctx.font = font(500, 26); ctx.fillText(ln, P, y); }); y += 40; });
+      y += 10;
+    });
+  }
+
+  // ช่องทางขอความช่วยเหลือ
+  y += 20;
+  const helpTop = y;
+  fill(() => {
+    ctx.fillStyle = "#FBF5E6"; ctx.fillRect(P, helpTop, inner, 168);
+    ctx.strokeStyle = RPT.gold; ctx.lineWidth = 2; ctx.strokeRect(P + 1, helpTop + 1, inner - 2, 166);
+    ctx.fillStyle = RPT.ink; ctx.font = font(800, 28); ctx.fillText("อยากคุยกับใครสักคน", P + 30, helpTop + 50);
+    ctx.font = font(500, 25);
+    ctx.fillText("• ผปค. (หน่วยปกครอง) — กดปุ่ม \"อยากคุยกับ ผปค.\" ในระบบดูแลใจ", P + 30, helpTop + 96);
+    ctx.fillText("• สายด่วนสุขภาพจิต 1323 (ฟรี 24 ชม.)   • เหตุฉุกเฉิน 1669", P + 30, helpTop + 138);
+  });
+  y = helpTop + 168 + 50;
+
+  // หมายเหตุท้ายเอกสาร
+  ctx.font = font(500, 21);
+  const foot = "ผลนี้เป็นการคัดกรองเบื้องต้นตามแบบประเมินของกรมสุขภาพจิต ไม่ใช่การวินิจฉัยโรค · เอกสารนี้เป็นข้อมูลส่วนบุคคล โปรดเก็บรักษาและไม่ส่งต่อ";
+  wrapLines(ctx, foot, inner).forEach(ln => { fill(() => { ctx.fillStyle = RPT.sub; ctx.font = font(500, 21); ctx.fillText(ln, P, y); }); y += 32; });
+  return y + 40;
+}
+
+function renderReportPng() {
+  const data = reportData();
+  const probe = document.createElement("canvas").getContext("2d");
+  const h = Math.ceil(drawReport(probe, data, true));
+  const canvas = document.createElement("canvas");
+  canvas.width = REPORT_W; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = RPT.paper; ctx.fillRect(0, 0, REPORT_W, h);
+  ctx.textBaseline = "alphabetic";
+  drawReport(ctx, data, false);
+  return canvas.toDataURL("image/png");
+}
+
+function openSheet(id) {
+  const el = document.getElementById(id);
+  el.classList.add("open"); el.setAttribute("aria-hidden", "false");
+}
+function closeSheet(id) {
+  const el = document.getElementById(id);
+  el.classList.remove("open"); el.setAttribute("aria-hidden", "true");
+}
+
+function refreshReportIfOpen() {
+  if (document.getElementById("report-sheet").classList.contains("open")) showReport();
+}
+
+function showReport() {
+  if (!state.results.st5) { showToast("ยังไม่มีผลประเมินให้สร้างรายงาน"); return; }
+  let url;
+  try { url = renderReportPng(); }
+  catch (e) { console.warn("report render failed:", e); showToast("สร้างรายงานไม่สำเร็จ ลองใหม่อีกครั้ง"); return; }
+  const stamp = new Date().toISOString().slice(0, 10);
+  document.getElementById("report-img").src = url;
+  const save = document.getElementById("report-save");
+  save.href = url;
+  save.download = `รายงานผล-ระบบดูแลใจ-${stamp}.png`;
+  // ในแอป LINE ปุ่มดาวน์โหลดไฟล์ใช้ไม่ได้ → แนะนำกดค้างที่รูปแทน
+  const inLine = liffState.inClient || /\bLine\//i.test(navigator.userAgent);
+  save.style.display = inLine ? "none" : "block";
+  const pending = saveState.status !== "saved" && CONFIG.GAS_ENDPOINT;
+  document.getElementById("report-hint").textContent =
+    (inLine ? "กดค้างที่รูป แล้วเลือก \"บันทึกรูปภาพ\" เพื่อเก็บไว้ในเครื่อง" : "กดปุ่มด้านล่างเพื่อบันทึกรูปลงเครื่อง หรือพิมพ์เก็บไว้") +
+    (pending ? " · เลขอ้างอิงจะขึ้นเมื่อบันทึกเข้าระบบเสร็จ" : "");
+  openSheet("report-sheet");
+}
+
+document.getElementById("btn-download-my-report").addEventListener("click", showReport);
+document.getElementById("report-close").addEventListener("click", () => closeSheet("report-sheet"));
+document.getElementById("ss-retry").addEventListener("click", () => {
+  if (saveState.payload) sendAssessmentWithRetry(saveState.payload);
 });
 
-document.getElementById("btn-help").addEventListener("click", () => {
-  showToast("ในระบบจริง ปุ่มนี้จะเชื่อมต่ออาจารย์ผู้ดูแล / คุยแบบนิรนาม / สายด่วน 1323");
+/* =========================================================
+   ขอคุยกับ ผปค. — บันทึกเรื่องเข้าระบบ (ชีต Alerts) แล้ว backend แจ้ง ผปค. ทันที
+   ========================================================= */
+const talk = { source: "result", ref: null, sending: false };
+
+function chipValue(group) {
+  const on = document.querySelector(`.chip-row[data-group="${group}"] .chip-opt[aria-pressed="true"]`);
+  return on ? on.dataset.val : "";
+}
+document.querySelectorAll(".chip-row").forEach(row => {
+  row.addEventListener("click", (e) => {
+    const btn = e.target.closest(".chip-opt");
+    if (!btn) return;
+    row.querySelectorAll(".chip-opt").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+    if (row.dataset.group === "contact") {
+      document.getElementById("talk-phone").style.display = btn.dataset.val === "phone" ? "block" : "none";
+    }
+  });
 });
-document.getElementById("btn-care-teacher").addEventListener("click", () => {
-  showToast("ในระบบจริง ระบบจะแจ้งอาจารย์ผู้ดูแลทาง LINE ทันที พร้อมเบอร์ติดต่อของคุณ");
+
+function openTalk(source) {
+  talk.source = source;
+  talk.ref = talk.ref || newRef("T");
+  document.getElementById("talk-err").textContent = "";
+  if (!document.getElementById("talk-done").dataset.sent) {
+    document.getElementById("talk-form").style.display = "block";
+    document.getElementById("talk-done").style.display = "none";
+  }
+  openSheet("talk-sheet");
+}
+
+async function sendTalk() {
+  if (talk.sending) return;
+  const err = document.getElementById("talk-err");
+  err.textContent = "";
+  const contact = chipValue("contact");
+  const phone = document.getElementById("talk-phone").value.trim();
+  if (contact === "phone" && phone.replace(/\D/g, "").length < 9) {
+    err.textContent = "กรุณาใส่เบอร์โทรให้ครบ หรือเลือก 'ทัก LINE กลับ' แทนก็ได้";
+    return;
+  }
+  if (!CONFIG.GAS_ENDPOINT) { err.textContent = "โหมดทดสอบ: ยังไม่ได้เชื่อมต่อระบบ"; return; }
+
+  const payload = {
+    action: "requestTalk",
+    clientRef: talk.ref,
+    studentId: activeStudentId(),
+    lineUserId: liffState.userId,
+    displayName: identity.name || liffState.displayName || "",
+    urgency: chipValue("urgency") || "urgent",
+    contact: contact || "line",
+    phone: contact === "phone" ? phone : "",
+    // ชื่อฟิลด์ต้องไม่ใช่ "message" — backend จะเข้าใจผิดว่าเป็น Telegram webhook
+    note: document.getElementById("talk-msg").value.trim().slice(0, 300),
+    source: talk.source,
+    assessmentId: saveState.assessmentId || "",
+  };
+
+  const btn = document.getElementById("talk-send");
+  talk.sending = true; btn.disabled = true; btn.textContent = "กำลังส่งถึง ผปค.…";
+  try {
+    let json = null, lastErr = null;
+    for (const wait of [0, 3000]) {
+      if (wait) await sleep(wait);
+      try { json = await postToGas(payload, 30000); break; }
+      catch (e) { lastErr = e; if (e.server) break; }
+    }
+    if (!json) throw lastErr || new Error("send failed");
+    outboxRemove(payload.clientRef);
+
+    const due = json.dueAt ? fmtThaiDateTime(json.dueAt) : "";
+    const how = { line: "ทาง LINE", phone: "ทางโทรศัพท์", visit: "เมื่อคุณไปที่ห้อง ผปค." }[payload.contact] || "";
+    document.getElementById("talk-done-title").textContent = "ส่งถึง ผปค. แล้ว";
+    document.getElementById("talk-done-text").textContent =
+      `เรื่องของคุณเข้าระบบแล้ว ผปค. จะติดต่อกลับ${how}` + (due ? ` ภายใน ${due}` : "") +
+      " ระหว่างรอ ถ้ารู้สึกไม่ไหว โทร 1323 ได้ทันทีนะ";
+    document.getElementById("talk-ticket").textContent = "เลขเรื่อง " + (json.ticketId || "-");
+    document.getElementById("talk-form").style.display = "none";
+    const done = document.getElementById("talk-done");
+    done.style.display = "block"; done.dataset.sent = "1";
+    const helpBtn = document.getElementById("btn-help");
+    helpBtn.textContent = "✅ ส่งเรื่องถึง ผปค. แล้ว — ดูรายละเอียด";
+  } catch (e) {
+    console.warn("requestTalk failed:", e);
+    if (e && e.server) {
+      err.textContent = "ระบบยังรับเรื่องไม่ได้ในขณะนี้ กรุณาโทร 1323 หรือติดต่อ ผปค. โดยตรง";
+    } else {
+      outboxAdd(payload); // เน็ตหลุด — เก็บไว้ส่งให้อัตโนมัติเมื่อสัญญาณกลับมา
+      err.textContent = "สัญญาณไม่ดี ยังส่งไม่ถึง — กด 'ส่ง' อีกครั้ง หรือโทร 1323 ถ้าต้องการคุยตอนนี้ (ระบบจะส่งให้เองเมื่อสัญญาณกลับมา)";
+    }
+  } finally {
+    talk.sending = false; btn.disabled = false; btn.textContent = "ส่งถึง ผปค. ทันที";
+  }
+}
+
+document.getElementById("btn-help").addEventListener("click", () => openTalk("result"));
+document.getElementById("btn-care-teacher").addEventListener("click", () => openTalk("care"));
+document.getElementById("talk-send").addEventListener("click", sendTalk);
+document.getElementById("talk-close").addEventListener("click", () => closeSheet("talk-sheet"));
+document.querySelectorAll(".sheet-backdrop").forEach(bd => {
+  bd.addEventListener("click", (e) => { if (e.target === bd) closeSheet(bd.id); });
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") document.querySelectorAll(".sheet-backdrop.open").forEach(bd => closeSheet(bd.id));
+});
+
 document.getElementById("btn-care-result").addEventListener("click", showResult);
 document.getElementById("btn-restart").addEventListener("click", () => location.reload());
 document.getElementById("btn-switch-user").addEventListener("click", () => {
@@ -1969,6 +2496,9 @@ initLiff().then(async () => {
     showScreen("screen-intro");
   }
 });
+
+// ส่งผลที่ค้างในเครื่องจากครั้งก่อน (ถ้ามี) — หน่วงไว้ให้หน้าแรกโหลดเสร็จก่อน
+setTimeout(flushOutbox, 4000);
 
 /** escape HTML — กัน XSS เวลาแสดง displayName จาก LINE */
 function esc(s) {
