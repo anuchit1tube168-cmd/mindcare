@@ -703,6 +703,28 @@ function activeStudentId() {
  * (เดิมเรียก verifyStudent ไปตรวจกับ Roster ก่อน แต่ทำให้หน้าใช้งานไม่ได้
  *  เมื่อ Apps Script ยังไม่ได้ deploy เวอร์ชันล่าสุด — ตัดออกเพื่อความเสถียร)
  */
+/* แจ้งระบบว่ามีผู้ "เข้าใช้งาน" (เปิดแอปและระบุตัวตนแล้ว) — ส่งครั้งเดียวต่อการเปิดหน้า
+   ส่งเฉพาะรหัส/ชื่อ/ประเภทผู้ใช้ ไม่มีคำตอบหรือคะแนน และไม่รอผล (ไม่ทำให้หน้าช้า) */
+let _visitLogged = false;
+function logVisit(source) {
+  if (_visitLogged || !CONFIG.GAS_ENDPOINT || !identity.id) return;
+  _visitLogged = true;
+  try {
+    fetch(CONFIG.GAS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "logVisit",
+        studentId: identity.id,
+        displayName: identity.name,
+        userType: identity.userType,
+        source: source,
+        inLine: !!(liffState && liffState.inClient),
+      }),
+    }).catch(function () { _visitLogged = false; });
+  } catch (e) { _visitLogged = false; }
+}
+
 function handleIdentify() {
   const errEl = document.getElementById("err-identity");
   const code = String(document.getElementById("in-code").value || "").trim();
@@ -735,6 +757,7 @@ function handleIdentify() {
     identity.name = name || ("นักเรียนรหัส " + code);
     identity.userType = "student";
     saveIdentityLocal();
+    logVisit("form");
     showScreen("screen-intro");
     return;
   }
@@ -745,6 +768,7 @@ function handleIdentify() {
     identity.name = name;
     identity.userType = "staff";
     saveIdentityLocal();
+    logVisit("form");
     showScreen("screen-intro");
     return;
   }
@@ -1959,6 +1983,7 @@ initLiff().then(async () => {
     identity.name = activeName || ("นักเรียนรหัส " + activeId);
     identity.userType = localType || (activeId && /^\d{7}$/.test(activeId) ? "student" : "staff");
     identity.confirmed = true;
+    logVisit("auto");
 
     // ทักทายชื่อผู้ใช้งานที่หน้า screen-intro
     const h1 = document.querySelector("#screen-intro h1");
