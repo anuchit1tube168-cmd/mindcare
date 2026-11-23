@@ -50,6 +50,7 @@ function handleTalkRequest(d) {
   getSheet(SHEETS.ALERTS).appendRow([
     new Date(), ticketId, sanitize(d.assessmentId || ""), sanitize(sid), "TALK",
     sanitize(reason), "แจ้งแล้ว", due, "", "", "", 0,
+    sanitize(String(d.lineUserId || "").slice(0, 64)), // คอลัมน์ M: LINE userId ไว้ตอบกลับ/ผูกตัวตน
   ]);
 
   // 2) แจ้ง ผปค.
@@ -59,6 +60,8 @@ function handleTalkRequest(d) {
       (urgent ? "🆘 นักเรียนขอคุย — ด่วน" : "💬 นักเรียนขอคุย") + "\n" +
       "ระบบดูแลใจ วพอ.พอ.\n" +
       "👤 " + who + "\n" +
+      (d.lineName ? "💚 ชื่อใน LINE: " + String(d.lineName).slice(0, 60) + "\n" : "") +
+      (d.lineUserId ? "🔗 LINE ID: บันทึกในระบบแล้ว\n" : "🔗 LINE ID: ไม่มี (เปิดนอกแอป LINE)\n") +
       "📞 ติดต่อ: " + contactText + "\n" +
       (message ? "📝 " + message + "\n" : "") +
       "📍 กดจาก: " + source + "\n" +
