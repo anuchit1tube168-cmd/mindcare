@@ -15,12 +15,17 @@
  * ติดตั้ง: รัน installAiTriggers() หนึ่งครั้ง
  * ========================================================== */
 
-// รุ่นราคาถูก (Flash-Lite) ก่อน — งานนี้ไม่ต้องใช้รุ่นใหญ่
-const AI_MODELS_FALLBACK = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"];
-// เพดานต่อเดือน (ห้ามเกิน): ถึงเพดานแล้วหยุดเรียก AI จนถึงเดือนถัดไป — งานหลักยังทำงานปกติ
-// 150,000 token ≈ ไม่เกินราว 1 ดอลลาร์ แม้คิดราคารุ่นที่แพงที่สุดในรายการ (ปรับได้ที่ AI_MONTHLY_TOKEN_LIMIT)
-const AI_DEFAULT_MONTHLY_TOKENS = 150000;
-const AI_DEFAULT_MONTHLY_CALLS = 400;
+// เรียงจากถูกสุด — งานนี้ไม่ต้องใช้รุ่นใหญ่
+const AI_MODELS_FALLBACK = ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"];
+// ราคา USD ต่อ 1 ล้าน token [ขาเข้า, ขาออกรวม thinking] (หน้าราคา Google, Standard tier, 23 พ.ย. 2569)
+const AI_PRICES = {
+  "gemini-2.5-flash-lite": [0.10, 0.40],
+  "gemini-3.1-flash-lite": [0.25, 1.50],
+  "gemini-3.5-flash-lite": [0.30, 2.50],
+};
+const AI_PRICE_UNKNOWN = [1.50, 7.50]; // รุ่นที่ไม่รู้ราคา → คิดแพงไว้ก่อน
+// เพดานเงินต่อเดือน (ห้ามเกิน 12 บาท): 0.30 USD ≈ 10-11 บาท เผื่อค่าเงินแกว่ง — ถึงแล้วหยุด AI จนถึงต้นเดือนหน้า
+const AI_DEFAULT_MONTHLY_USD = 0.30;
 const AI_QUEUE_SHEET = "AiQueue";
 
 // ถ้อยคำเสี่ยง (ด่านแรก ทำงานแม้ AI ล่ม) — ตรวจแบบตัดช่องว่างแล้ว
@@ -59,7 +64,6 @@ function geminiGenerate_(prompt, opts) {
   const props = PropertiesService.getScriptProperties();
   const key = props.getProperty("GEMINI_API_KEY");
   if (!key) return null;
-  if (!aiBudgetAllows_()) return null;
   const models = [props.getProperty("GEMINI_MODEL")].concat(AI_MODELS_FALLBACK).filter(Boolean);
   const body = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -72,6 +76,9 @@ function geminiGenerate_(prompt, opts) {
   if (opts.system) body.systemInstruction = { parts: [{ text: opts.system }] };
 
   for (let i = 0; i < models.length; i++) {
+    // กันเกินงบ: ต้องมีงบเหลือพอสำหรับ "กรณีแพงสุด" ของคำขอนี้ก่อนจึงจะเรียก
+    const worst = aiCostUsd_(models[i], Math.ceil(prompt.length / 1.5) + 400, body.generationConfig.maxOutputTokens);
+    if (!aiBudgetAllows_(worst)) return null;
     try {
       const res = UrlFetchApp.fetch(
         "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(models[i]) + ":generateContent", {
@@ -86,7 +93,10 @@ function geminiGenerate_(prompt, opts) {
         return null;
       }
       const j = JSON.parse(res.getContentText());
-      aiBudgetRecord_(j.usageMetadata && j.usageMetadata.totalTokenCount);
+      const um = j.usageMetadata || {};
+      const inTok = Number(um.promptTokenCount) || Math.ceil(prompt.length / 1.5);
+      const outTok = Math.max(0, (Number(um.totalTokenCount) || 0) - inTok) || body.generationConfig.maxOutputTokens;
+      aiBudgetRecord_(aiCostUsd_(models[i], inTok, outTok));
       const parts = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts;
       const text = parts ? parts.map(function (p) { return p.text || ""; }).join("").trim() : "";
       return text || null;
@@ -113,37 +123,48 @@ function aiUsage_() {
   catch (e) { return {}; }
 }
 
-function aiBudgetAllows_() {
+function aiCostUsd_(model, inTok, outTok) {
+  const p = AI_PRICES[model] || AI_PRICE_UNKNOWN;
+  return (inTok * p[0] + outTok * p[1]) / 1e6;
+}
+
+function aiBudgetLimit_() {
+  return Number(PropertiesService.getScriptProperties().getProperty("AI_MONTHLY_BUDGET_USD")) || AI_DEFAULT_MONTHLY_USD;
+}
+
+/** อนุญาตเฉพาะเมื่อ ยอดใช้แล้ว + ค่าใช้จ่ายสูงสุดของคำขอนี้ ไม่เกินเพดาน */
+function aiBudgetAllows_(worstUsd) {
   const p = PropertiesService.getScriptProperties();
-  const tokLimit = Number(p.getProperty("AI_MONTHLY_TOKEN_LIMIT")) || AI_DEFAULT_MONTHLY_TOKENS;
-  const callLimit = Number(p.getProperty("AI_MONTHLY_CALL_LIMIT")) || AI_DEFAULT_MONTHLY_CALLS;
   const u = aiUsage_();
-  const ok = (u.tokens || 0) < tokLimit && (u.calls || 0) < callLimit;
+  const ok = (u.usd || 0) + (worstUsd || 0) <= aiBudgetLimit_();
   if (!ok && !u.notified) {
     u.notified = true;
     p.setProperty(aiMonthKey_(), JSON.stringify(u));
     try {
-      pushTelegramMessage("⚠️ AI ของระบบดูแลใจใช้ครบเพดานเดือนนี้แล้ว (" + (u.tokens || 0) + " token / " + (u.calls || 0) +
+      pushTelegramMessage("⚠️ AI ของระบบดูแลใจใช้ครบงบเดือนนี้แล้ว (~" + ((u.usd || 0) * 36).toFixed(2) + " บาท จาก " + u.calls +
         " ครั้ง) — หยุดใช้ AI อัตโนมัติจนถึงต้นเดือนหน้า\nงานหลักยังทำงานปกติ: แจ้งเตือน, ขอคุย, ตรวจถ้อยคำเสี่ยง");
     } catch (e) {}
   }
   return ok;
 }
 
-function aiBudgetRecord_(tokens) {
+function aiBudgetRecord_(usd) {
   const lock = LockService.getScriptLock();
   const got = lock.tryLock(3000);
   try {
-    const p = PropertiesService.getScriptProperties();
     const u = aiUsage_();
     u.calls = (u.calls || 0) + 1;
-    u.tokens = (u.tokens || 0) + (Number(tokens) || 1500); // ไม่รู้จำนวนจริง → คิดเผื่อไว้ก่อน
-    p.setProperty(aiMonthKey_(), JSON.stringify(u));
+    u.usd = Math.round(((u.usd || 0) + (Number(usd) || 0)) * 1e6) / 1e6;
+    PropertiesService.getScriptProperties().setProperty(aiMonthKey_(), JSON.stringify(u));
   } finally { if (got) lock.releaseLock(); }
 }
 
 /** ดูยอดใช้ AI เดือนนี้ (รันใน editor) */
-function showAiUsage() { Logger.log(aiMonthKey_() + " " + JSON.stringify(aiUsage_())); }
+function showAiUsage() {
+  const u = aiUsage_();
+  Logger.log(aiMonthKey_() + ": " + (u.calls || 0) + " ครั้ง, ~$" + (u.usd || 0) + " (~" + ((u.usd || 0) * 36).toFixed(2) +
+    " บาท) จากเพดาน $" + aiBudgetLimit_());
+}
 
 /* ---------------- 1) สรุปรายสัปดาห์ ---------------- */
 

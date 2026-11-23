@@ -49,4 +49,4 @@
 - `aiProcessQueue` (ทุก 1 นาที): ข้อความที่ตัดข้อมูลระบุตัวตนแล้ว → ร่างข้อความทักนักเรียน + AI คัดกรองด่านสอง → Telegram
 - `aiWeeklySummary` (จันทร์ 07:00): ส่งเฉพาะตัวเลขรวมรายชั้นปี (ค่า 1-2 ถูกปิด) → สรุปเข้า Telegram
 - ติดตั้ง trigger: รัน `installAiTriggers()` · ปิดทั้งหมด: ตั้ง `AI_ENABLED=off`
-- v66: ใช้รุ่น Flash-Lite + เพดานรายเดือน 150,000 token / 400 ครั้ง (ปรับที่ `AI_MONTHLY_TOKEN_LIMIT`, `AI_MONTHLY_CALL_LIMIT`) ครบแล้วหยุดเอง + แจ้ง Telegram
+- v67: เพดานเงินจริง 0.30 USD/เดือน (≤ 12 บาท) คิดจากราคาต่อรุ่น + จำนวน token จริง และเช็ก "กรณีแพงสุด" ก่อนเรียกทุกครั้ง ครบแล้วหยุดเอง + แจ้ง Telegram (ปรับที่ `AI_MONTHLY_BUDGET_USD`) · ดูยอด: รัน `showAiUsage()`
