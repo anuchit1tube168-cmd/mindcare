@@ -35,7 +35,8 @@ function handleTalkRequest(d) {
   const urgent = d.urgency !== "normal";
   const contact = TALK_CONTACT_LABEL[d.contact] ? d.contact : "line";
   const phone = String(d.phone || "").replace(/[^\d+]/g, "").slice(0, 15);
-  const message = String(d.message || "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, 300);
+  // ห้ามใช้ชื่อฟิลด์ "message" — doPost จะเข้าใจว่าเป็น Telegram webhook
+  const message = String(d.note || "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, 300);
   const source = d.source === "care" ? "หน้าดูแลพิเศษ (8Q)" : "หน้าผลประเมิน";
   const who = talkWho_(sid, d.displayName);
 
@@ -91,6 +92,6 @@ function talkWho_(sid, displayName) {
 /** ทดสอบใน editor: ต้องเห็นแถว TALK ใหม่ในชีต Alerts (และข้อความในกลุ่ม ถ้าตั้งค่าช่องแจ้งเตือนไว้) */
 function testTalkRequest() {
   const r = handleTalkRequest({ studentId: "TEST-TALK", displayName: "ทดสอบปุ่มขอคุย", urgency: "normal",
-    contact: "line", message: "ทดสอบระบบ — ไม่ต้องติดต่อกลับ", clientRef: "test-" + Date.now() });
+    contact: "line", note: "ทดสอบระบบ — ไม่ต้องติดต่อกลับ", clientRef: "test-" + Date.now() });
   Logger.log(JSON.stringify(r));
 }

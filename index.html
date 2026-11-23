@@ -2379,7 +2379,8 @@ async function sendTalk() {
     urgency: chipValue("urgency") || "urgent",
     contact: contact || "line",
     phone: contact === "phone" ? phone : "",
-    message: document.getElementById("talk-msg").value.trim().slice(0, 300),
+    // ชื่อฟิลด์ต้องไม่ใช่ "message" — backend จะเข้าใจผิดว่าเป็น Telegram webhook
+    note: document.getElementById("talk-msg").value.trim().slice(0, 300),
     source: talk.source,
     assessmentId: saveState.assessmentId || "",
   };
