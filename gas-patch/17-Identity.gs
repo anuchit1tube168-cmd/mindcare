@@ -1,4 +1,3 @@
-
 /* ==========================================================
  * 17-Identity — แปลงชื่อที่นักเรียนกรอก/ชื่อ LINE เป็น "รหัส 7 หลัก + ชื่อจริง" ก่อนบันทึกและแจ้งเตือน
  *
@@ -6,8 +5,7 @@
  *  1) รหัส 7 หลักที่อยู่ในทะเบียนอยู่แล้ว
  *  2) LINE userId ที่เคยผูกรหัสไว้ (ชีต Bindings)
  *  3) ชีต IdAlias ที่ ผปค. ยืนยันแล้ว (คอลัมน์ "รหัสจริง" มีค่า)
- *  4) เดาจาก "เลขที่ + ชื่อ" เทียบทะเบียน — ใช้เฉพาะเมื่อชี้ได้คนเดียว และติดป้าย "โปรดตรวจ"
- *     (ไม่ผูก LINE ให้อัตโนมัติ กันผูกผิดคน)
+ *  (ไม่เดาจากชื่อหรือเลขที่ — ถ้าไม่มีข้อมูลยืนยัน ให้ ผปค. เติมรหัสเอง)
  *  ถ้ายังหาไม่ได้: เพิ่มแถวใน IdAlias ให้ ผปค. เติมรหัสจริงครั้งเดียว ครั้งต่อไประบบใช้รหัสจริงเอง
  * ========================================================== */
 
@@ -85,19 +83,7 @@ function resolveStudentIdentity_(claimedId, lineUserId, displayName) {
     }
   }
 
-  // เดาจากเลขที่ + ชื่อ (ต้องชี้ได้คนเดียวเท่านั้น)
-  const c = parseClaim_(claim + " " + (displayName || ""));
-  let cands = students.filter(function (s) {
-    const fn = firstNameOf_(s.name);
-    const thaiHit = c.th.some(function (w) { return w === fn || (w.length >= 3 && fn.indexOf(w) === 0); });
-    const latHit = c.no !== null && s.no === c.no && c.latin.some(function (l) { return latinLooksLike_(l, fn); });
-    return thaiHit || latHit;
-  });
-  if (cands.length > 1 && c.no !== null) cands = cands.filter(function (s) { return s.no === c.no; });
-  if (cands.length === 1) {
-    const s = cands[0];
-    return { id: s.id, name: s.name, year: s.year, how: "guess", confirmed: false };
-  }
+  // ไม่เดาตัวตนจากชื่อ/เลขที่ — ใช้เฉพาะข้อมูลที่ยืนยันแล้วเท่านั้น (ห้ามผูกผิดคน)
   return null;
 }
 
@@ -145,7 +131,7 @@ function applyResolvedIdentity_(d) {
 
 /** ทดสอบใน editor */
 function testResolveIdentity() {
-  ["N-08 Jirapha (ว่าน)", "LINE: 29 นพอ.ณัฐธิชา(บีม)", "6903955", "N-สมชาย ใจดี"].forEach(function (x) {
+  ["N-08 Jirapha (ว่าน)", "LINE: 29 นพอ.ณัฐธิชา(บีม)", "6903955"].forEach(function (x) {
     Logger.log(x + " → " + JSON.stringify(resolveStudentIdentity_(x, "", "")));
   });
 }
