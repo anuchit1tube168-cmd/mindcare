@@ -489,7 +489,7 @@
       บุคลากรหรือบุคคลภายนอกที่ไม่มีรหัส เว้นช่องรหัสว่างไว้ กรอกเฉพาะชื่อได้เลย
     </p>
     <input class="field" id="in-code" type="tel" inputmode="numeric" maxlength="7"
-           autocomplete="off" placeholder="รหัสประจำตัว 7 หลัก (ถ้ามี)" style="margin-bottom:10px;">
+           autocomplete="off" placeholder="รหัสประจำตัว 7 หลัก (นักเรียนต้องกรอก)" style="margin-bottom:10px;">
     <input class="field" id="in-name" type="text" maxlength="60" autocomplete="off"
            placeholder="ชื่อ - สกุล" style="font-size:18px; letter-spacing:normal;">
     <div class="field-err" id="err-identity"></div>
@@ -849,19 +849,42 @@ function handleIdentify() {
     identity.name = name || ("นักเรียนรหัส " + code);
     identity.userType = "student";
     saveIdentityLocal();
+    bindLineToStudent(code); // ผูก LINE กับรหัสครั้งเดียว ครั้งหน้าไม่ต้องกรอกอีก
     showScreen("screen-intro");
     return;
   }
 
   // กรณีที่ 2: เว้นช่องรหัสว่างไว้ และระบุชื่อ
+  // เหตุผล: นักเรียนหลายคนกรอกแค่ "เลขที่+ชื่อเล่น" ทำให้แจ้งเตือนไม่มีรหัส/ชื่อจริง → เตือนก่อน 1 ครั้ง
   if (name) {
+    if (!identity._staffWarned) {
+      identity._staffWarned = true;
+      if (errEl) {
+        errEl.style.color = "#E8C57E";
+        errEl.textContent = "นักเรียน: กรุณากรอกรหัสประจำตัว 7 หลักด้วย เพื่อให้ ผปค. ดูแลได้ถูกคน · " +
+          "ถ้าเป็นบุคลากร/บุคคลทั่วไป กด 'ถัดไป' อีกครั้ง";
+      }
+      document.getElementById("in-code").focus();
+      return;
+    }
     identity.id = "N-" + name;
     identity.name = name;
     identity.userType = "staff";
     saveIdentityLocal();
+    try { localStorage.setItem("mindcare_staff_confirmed", "1"); } catch (e) {}
     showScreen("screen-intro");
     return;
   }
+}
+
+/** ผูก LINE userId กับรหัสนักเรียน (ไม่รอผล — ถ้าล้มเหลว ระบบหลังบ้านยังจับคู่ให้จากรหัสที่ส่งมากับผลประเมิน) */
+function bindLineToStudent(code) {
+  if (!CONFIG.GAS_ENDPOINT || !liffState.userId || liffState.studentId === code) return;
+  fetch(CONFIG.GAS_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action: "bindStudent", lineUserId: liffState.userId, studentId: code }),
+  }).catch(function (e) { console.warn("bindStudent ล้มเหลว:", e); });
 }
 
 function saveIdentityLocal() {
@@ -2472,20 +2495,24 @@ initLiff().then(async () => {
     localType = localStorage.getItem("mindcare_user_type") || "";
   } catch (e) {}
 
-  const activeId = liffState.studentId || queryParam("sid") || localId;
+  const activeId = liffState.studentId || queryParam("sid") || (/^\d{7}$/.test(localId) || localType === "staff" ? localId : "");
   const activeName = queryParam("nm") || liffState.displayName || localName;
 
   // เติมค่าใส่ช่องพิมพ์หน้าระบุตัวตนเป็น fallback
   const codeField = document.getElementById("in-code");
   const nameField = document.getElementById("in-name");
-  if (codeField && activeId && !codeField.value) codeField.value = activeId;
+  if (codeField && /^\d{7}$/.test(activeId) && !codeField.value) codeField.value = activeId;
   if (nameField && activeName && !nameField.value) nameField.value = activeName;
 
-  // ถ้าเคยระบุตัวตนไว้แล้วจากการใช้งานครั้งแรก -> AUTO: จำค่าอัตโนมัติ และข้ามไปหน้าเริ่มประเมินทันที!
-  if (activeId || activeName) {
+  // ข้ามหน้าระบุตัวตนเฉพาะเมื่อ (ก) มีรหัส 7 หลักจริง หรือ (ข) เคยยืนยันเองว่าเป็นบุคลากร
+  // เดิมใช้ชื่อ LINE อย่างเดียวก็ข้ามได้ → แจ้งเตือน ผปค. ขึ้นแค่ "N-ชื่อเล่น" ไม่มีรหัส/ชื่อจริง
+  let staffConfirmed = false;
+  try { staffConfirmed = localStorage.getItem("mindcare_staff_confirmed") === "1"; } catch (e) {}
+  const hasRealId = /^\d{7}$/.test(activeId);
+  if (hasRealId || (staffConfirmed && localId && localType === "staff")) {
     identity.id = activeId || ("N-" + activeName);
     identity.name = activeName || ("นักเรียนรหัส " + activeId);
-    identity.userType = localType || (activeId && /^\d{7}$/.test(activeId) ? "student" : "staff");
+    identity.userType = hasRealId ? "student" : "staff";
     identity.confirmed = true;
 
     // ทักทายชื่อผู้ใช้งานที่หน้า screen-intro
